@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: learnSpringMongoDb
+  mongodb:
+    uri: mongodb://admin:password@localhost:27017/ecommerce_db?authSource=admin
+    auto-index-creation: true
+
+logging:
+  level:
+    # Logs what Spring Data's MongoTemplate is doing behind the scenes
+    org.springframework.data.mongodb.core.MongoTemplate: DEBUG
+
+    # Logs the actual raw JSON commands and queries sent by the MongoDB Java driver
+    org.mongodb.driver: DEBUG
