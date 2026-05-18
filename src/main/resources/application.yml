@@ -7,8 +7,5 @@ spring:
 
 logging:
   level:
-    # Logs what Spring Data's MongoTemplate is doing behind the scenes
-    org.springframework.data.mongodb.core.MongoTemplate: DEBUG
-
-    # Logs the actual raw JSON commands and queries sent by the MongoDB Java driver
-    org.mongodb.driver: DEBUG
+    org.springframework.data.mongodb.core.MongoTemplate: INFO
+    org.mongodb.driver: WARN
