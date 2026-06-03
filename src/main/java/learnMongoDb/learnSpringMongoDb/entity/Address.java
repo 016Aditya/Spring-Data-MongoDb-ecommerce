@@ -12,6 +12,5 @@ public class Address {
     private String zipCode;
     private String country;
 
-    private Address address;
 
 }

@@ -25,6 +25,9 @@ public class Order {
     @Id
     private String id;
 
+    @Indexed
+    private String userId;
+
     private Integer quantity;
     private Double totalPrice;
 

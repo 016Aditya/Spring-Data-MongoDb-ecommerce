@@ -4,7 +4,7 @@ import learnMongoDb.learnSpringMongoDb.entity.Address;
 import learnMongoDb.learnSpringMongoDb.entity.Order;
 import learnMongoDb.learnSpringMongoDb.entity.Product;
 import learnMongoDb.learnSpringMongoDb.repository.OrderRepository;
-import learnMongoDb.learnSpringMongoDb.repository.ProductRespository;
+import learnMongoDb.learnSpringMongoDb.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,7 +18,7 @@ public class RelationshipMongoTests {
     private OrderRepository orderRepository;
 
     @Autowired
-    private ProductRespository productRepository;
+    private ProductRepository productRepository;
 
     @Test
     public void testOrderCreation() {
