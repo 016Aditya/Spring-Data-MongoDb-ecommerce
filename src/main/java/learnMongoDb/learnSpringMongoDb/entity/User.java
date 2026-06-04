@@ -1,7 +1,9 @@
 package learnMongoDb.learnSpringMongoDb.entity;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -12,6 +14,8 @@ import java.time.LocalDateTime;
 
 @Data
 @Builder
+@NoArgsConstructor // Added for Jackson JSON deserialization
+@AllArgsConstructor // Required by @Builder when @NoArgsConstructor is present
 @Document(collection = "users")
 public class User {
 
@@ -26,7 +30,7 @@ public class User {
 
     private String password;
 
-    private String role; // e.g., "USER" or "ADMIN"
+    private String role;
 
     @CreatedDate
     private LocalDateTime createdAt;

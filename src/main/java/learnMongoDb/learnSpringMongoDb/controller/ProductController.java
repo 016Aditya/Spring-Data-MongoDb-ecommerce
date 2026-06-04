@@ -1,5 +1,6 @@
 package learnMongoDb.learnSpringMongoDb.controller;
 
+import learnMongoDb.learnSpringMongoDb.dto.ProductDto;
 import learnMongoDb.learnSpringMongoDb.entity.Product;
 import learnMongoDb.learnSpringMongoDb.service.ProductService;
 import lombok.RequiredArgsConstructor;
@@ -7,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/products")
@@ -16,19 +18,44 @@ public class ProductController {
     private final ProductService productService;
 
     @PostMapping
-    public ResponseEntity<Product> createProduct(@RequestBody Product product) {
-        return ResponseEntity.ok(productService.createProduct(product));
+    public ResponseEntity<ProductDto.Response> createProduct(@RequestBody ProductDto.Request request) {
+        // 1. Map DTO to Entity
+        Product productToSave = Product.builder()
+                .name(request.getName())
+                .category(request.getCategory())
+                .price(request.getPrice())
+                .build();
+
+        // 2. Save to database
+        Product savedProduct = productService.createProduct(productToSave);
+
+        // 3. Map Entity back to DTO
+        return ResponseEntity.ok(mapToResponse(savedProduct));
     }
 
     @GetMapping
-    public ResponseEntity<List<Product>> getAllProducts() {
-        return ResponseEntity.ok(productService.getAllProducts());
+    public ResponseEntity<List<ProductDto.Response>> getAllProducts() {
+        List<ProductDto.Response> responses = productService.getAllProducts().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(responses);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Product> getProductById(@PathVariable String id) {
+    public ResponseEntity<ProductDto.Response> getProductById(@PathVariable String id) {
         return productService.getProductById(id)
-                .map(ResponseEntity::ok)
+                .map(product -> ResponseEntity.ok(mapToResponse(product)))
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // --- Helper Method ---
+
+    private ProductDto.Response mapToResponse(Product product) {
+        ProductDto.Response response = new ProductDto.Response();
+        response.setId(product.getId());
+        response.setName(product.getName());
+        response.setCategory(product.getCategory());
+        response.setPrice(product.getPrice());
+        return response;
     }
 }

@@ -28,6 +28,20 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    public User loginUser(String email, String password) {
+        // 1. Find the user by email
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found with this email."));
+
+        // 2. Check if the password matches (Note: This is plain text for prototyping!)
+        if (!user.getPassword().equals(password)) {
+            throw new RuntimeException("Invalid password.");
+        }
+
+        // 3. If everything is correct, return the user data
+        return user;
+    }
+
     public Optional<User> getUserById(String id) {
         return userRepository.findById(id);
     }
