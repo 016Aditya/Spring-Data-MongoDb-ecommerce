@@ -66,6 +66,28 @@ public class ProductController {
         return ResponseEntity.ok(mapToResponse(updatedProduct));
     }
 
+    @GetMapping("/category/{category}")
+    public ResponseEntity<List<ProductDto.Response>> getProductsByCategory(@PathVariable String category) {
+        List<ProductDto.Response> responses = productService.getProductsByCategory(category).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<List<ProductDto.Response>> searchProducts(@RequestParam String keyword) {
+        List<ProductDto.Response> responses = productService.searchProductsByName(keyword).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(responses);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteProduct(@PathVariable String id) {
+        productService.deleteProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // --- Helper Method ---
 
     private ProductDto.Response mapToResponse(Product product) {

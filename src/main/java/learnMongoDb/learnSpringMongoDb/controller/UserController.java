@@ -62,6 +62,11 @@ public class UserController {
         return ResponseEntity.ok(mapToResponse(updatedUser));
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteUser(@PathVariable String id) {
+        userService.deleteUser(id);
+        return ResponseEntity.noContent().build();
+    }
 
     // --- Helper Methods & Classes ---
 

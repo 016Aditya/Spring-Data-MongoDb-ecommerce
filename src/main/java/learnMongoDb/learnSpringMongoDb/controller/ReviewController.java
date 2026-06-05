@@ -59,6 +59,12 @@ public class ReviewController {
         return ResponseEntity.ok(mapToResponse(updatedReview));
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteReview(@PathVariable String id) {
+        reviewService.deleteReview(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // --- Helper Method ---
     private ReviewDto.Response mapToResponse(Review review) {
         ReviewDto.Response response = new ReviewDto.Response();

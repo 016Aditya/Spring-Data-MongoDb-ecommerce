@@ -70,6 +70,26 @@ public class OrderController {
         return ResponseEntity.ok(mapToResponse(updatedOrder));
     }
 
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<OrderDto.Response>> getOrdersByUser(@PathVariable String userId) {
+        List<OrderDto.Response> responses = orderService.getOrdersByUserId(userId).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<OrderDto.Response> getOrderById(@PathVariable String id) {
+        Order order = orderService.getOrderById(id);
+        return ResponseEntity.ok(mapToResponse(order));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteOrder(@PathVariable String id) {
+        orderService.deleteOrder(id);
+        return ResponseEntity.noContent().build(); // Returns a clean 204
+    }
+
     // --- Helper Method ---
 
     // Translates a database Order into a safe JSON Response

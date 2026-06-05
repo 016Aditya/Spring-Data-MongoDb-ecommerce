@@ -62,4 +62,14 @@ public class ShoppingCartController {
 
         return ResponseEntity.ok(updatedCart);
     }
+
+    @DeleteMapping("/{userId}/items/{productId}")
+    public ResponseEntity<ShoppingCart> removeItemFromCart(
+            @PathVariable String userId,
+            @PathVariable String productId) {
+
+        ShoppingCart updatedCart = cartService.removeItemFromCart(userId, productId);
+
+        return ResponseEntity.ok(updatedCart);
+    }
 }

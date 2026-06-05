@@ -28,6 +28,10 @@ public class ProductService {
         return productRepository.findById(id);
     }
 
+    public List<Product> getProductsByCategory(String category) {
+        return productRepository.findByCategory(category);
+    }
+
     public Product updateProduct(String id, Product updatedData) {
         // 1. Find the existing product
         Product existingProduct = productRepository.findById(id)
@@ -40,5 +44,13 @@ public class ProductService {
 
         // 3. Save and return (MongoDB will automatically update the @LastModifiedDate!)
         return productRepository.save(existingProduct);
+    }
+
+    public List<Product> searchProductsByName(String keyword) {
+        return productRepository.findByNameContainingIgnoreCase(keyword);
+    }
+
+    public void deleteProduct(String id) {
+        productRepository.deleteById(id);
     }
 }

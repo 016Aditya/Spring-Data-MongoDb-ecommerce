@@ -37,4 +37,8 @@ public class ReviewService {
         // 3. Save and return (MongoDB updates the timestamp automatically)
         return reviewRepository.save(existingReview);
     }
+
+    public void deleteReview(String id) {
+        reviewRepository.deleteById(id);
+    }
 }

@@ -46,6 +46,10 @@ public class OrderService {
         return orderRepository.save(order);
     }
 
+    public List<Order> getOrdersByUserId(String userId) {
+        return orderRepository.findByUserId(userId);
+    }
+
     // Leveraging the custom queries you wrote earlier
     public List<Order> getOrdersByStatusAndPrice(String status, double minPrice) {
         return orderRepository.findOrdersByStatusAndPrice(status, minPrice);
@@ -62,5 +66,15 @@ public class OrderService {
         order.setStatus(newStatus);
 
         return orderRepository.save(order);
+    }
+
+    public Order getOrderById(String orderId) {
+        return orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+    }
+
+    // WARNING: This permanently wipes the financial record from the database!
+    public void deleteOrder(String id) {
+        orderRepository.deleteById(id);
     }
 }

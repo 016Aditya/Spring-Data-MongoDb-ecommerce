@@ -96,4 +96,30 @@ public class ShoppingCartService {
 
         return cartRepository.save(cart);
     }
+
+    public ShoppingCart removeItemFromCart(String userId, String productId) {
+        ShoppingCart cart = cartRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Cart not found for user: " + userId));
+
+        // Defensive check just in case the cart is totally empty
+        if (cart.getItems() == null || cart.getItems().isEmpty()) {
+            throw new RuntimeException("Cart is already empty!");
+        }
+
+        // removeIf returns 'true' if it successfully found and removed the item
+        boolean itemRemoved = cart.getItems().removeIf(item -> item.getProductId().equals(productId));
+
+        if (!itemRemoved) {
+            throw new RuntimeException("Item not found in cart!");
+        }
+
+        // Recalculate the total price of the cart without that item
+        double total = cart.getItems().stream()
+                .mapToDouble(item -> item.getUnitPrice() * item.getQuantity())
+                .sum();
+
+        cart.setCartTotal(total);
+
+        return cartRepository.save(cart);
+    }
 }
