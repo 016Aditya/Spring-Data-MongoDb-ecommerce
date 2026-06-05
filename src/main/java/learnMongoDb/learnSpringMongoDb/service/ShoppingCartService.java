@@ -63,4 +63,37 @@ public class ShoppingCartService {
         cart.setCartTotal(0.0);
         cartRepository.save(cart);
     }
+
+    public ShoppingCart updateItemQuantity(String userId, String productId, int newQuantity) {
+        ShoppingCart cart = cartRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("Cart not found for user: " + userId));
+
+        if (newQuantity <= 0) {
+            // If quantity is 0 or less, remove the item from the list completely
+            cart.getItems().removeIf(item -> item.getProductId().equals(productId));
+        } else {
+            // Find the item and update its quantity
+            cart.getItems().stream()
+                    .filter(item -> item.getProductId().equals(productId))
+                    .findFirst()
+                    .ifPresentOrElse(
+                            item -> item.setQuantity(newQuantity),
+                            () -> { throw new RuntimeException("Item not found in cart!"); }
+                    );
+        }
+
+        // Recalculate the total price of the cart
+        // Recalculate the total price of the cart
+        double total = cart.getItems().stream()
+                .mapToDouble(item -> item.getUnitPrice() * item.getQuantity())
+                .sum();
+
+        // CHANGE THIS LINE:
+        // cart.setTotalPrice(total);
+
+        // TO THIS:
+        cart.setCartTotal(total);
+
+        return cartRepository.save(cart);
+    }
 }

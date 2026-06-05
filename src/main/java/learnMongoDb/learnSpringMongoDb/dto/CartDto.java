@@ -9,4 +9,10 @@ public class CartDto {
         private String productId;
         private Integer quantity;
     }
+
+    @Data
+    public static class UpdateItemRequest {
+        private String productId;
+        private Integer quantity;
+    }
 }

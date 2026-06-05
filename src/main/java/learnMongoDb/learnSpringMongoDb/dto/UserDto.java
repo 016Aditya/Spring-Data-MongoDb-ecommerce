@@ -22,4 +22,11 @@ public class UserDto {
         private String role;
         private LocalDateTime createdAt;
     }
+
+    @Data
+    public static class UpdateProfileRequest {
+        private String firstName;
+        private String lastName;
+        private String password;
+    }
 }

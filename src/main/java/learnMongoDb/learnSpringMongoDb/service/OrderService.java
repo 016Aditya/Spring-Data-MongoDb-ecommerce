@@ -54,4 +54,13 @@ public class OrderService {
     public List<Order> getOrdersByCity(String city) {
         return orderRepository.findByAddressCity(city);
     }
+
+    public Order updateOrderStatus(String orderId, String newStatus) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+
+        order.setStatus(newStatus);
+
+        return orderRepository.save(order);
+    }
 }

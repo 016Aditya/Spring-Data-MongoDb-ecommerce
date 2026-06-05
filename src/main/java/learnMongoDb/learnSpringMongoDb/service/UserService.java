@@ -42,6 +42,17 @@ public class UserService {
         return user;
     }
 
+    public User updateUserProfile(String id, String firstName, String lastName, String password) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + id));
+
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
+        user.setPassword(password);
+
+        return userRepository.save(user);
+    }
+
     public Optional<User> getUserById(String id) {
         return userRepository.findById(id);
     }

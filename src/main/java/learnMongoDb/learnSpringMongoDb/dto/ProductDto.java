@@ -18,4 +18,11 @@ public class ProductDto {
         private String category;
         private double price;
     }
+
+    @Data
+    public static class UpdateRequest {
+        private String name;
+        private String category;
+        private double price;
+    }
 }

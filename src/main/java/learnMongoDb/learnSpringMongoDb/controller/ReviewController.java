@@ -47,6 +47,18 @@ public class ReviewController {
         return ResponseEntity.ok(responses);
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<ReviewDto.Response> updateReview(
+            @PathVariable String id,
+            @RequestBody ReviewDto.UpdateRequest request) {
+
+        // Pass the ID from the URL and the data from the Body to the Service
+        Review updatedReview = reviewService.updateReview(id, request.getRating(), request.getComment());
+
+        // Return the clean Response DTO
+        return ResponseEntity.ok(mapToResponse(updatedReview));
+    }
+
     // --- Helper Method ---
     private ReviewDto.Response mapToResponse(Review review) {
         ReviewDto.Response response = new ReviewDto.Response();

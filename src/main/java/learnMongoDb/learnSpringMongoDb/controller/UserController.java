@@ -47,6 +47,22 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<UserDto.Response> updateUserProfile(
+            @PathVariable String id,
+            @RequestBody UserDto.UpdateProfileRequest request) {
+
+        User updatedUser = userService.updateUserProfile(
+                id,
+                request.getFirstName(),
+                request.getLastName(),
+                request.getPassword()
+        );
+
+        return ResponseEntity.ok(mapToResponse(updatedUser));
+    }
+
+
     // --- Helper Methods & Classes ---
 
     // Translates a database User into a safe JSON Response

@@ -25,4 +25,9 @@ public class OrderDto {
         private Address address;
         private LocalDateTime createdAt;
     }
+
+    @Data
+    public static class UpdateStatusRequest {
+        private String status; // e.g., "SHIPPED", "DELIVERED", "CANCELLED"
+    }
 }

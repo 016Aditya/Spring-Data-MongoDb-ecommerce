@@ -28,4 +28,10 @@ public class ReviewDto {
         private String comment;
         private LocalDateTime createdAt;
     }
+
+    @Data
+    public static class UpdateRequest {
+        private Integer rating;
+        private String comment;
+    }
 }

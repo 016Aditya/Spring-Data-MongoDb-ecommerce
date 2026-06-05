@@ -60,6 +60,16 @@ public class OrderController {
         return ResponseEntity.ok(responses);
     }
 
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<OrderDto.Response> updateOrderStatus(
+            @PathVariable String id,
+            @RequestBody OrderDto.UpdateStatusRequest request) {
+
+        Order updatedOrder = orderService.updateOrderStatus(id, request.getStatus());
+
+        return ResponseEntity.ok(mapToResponse(updatedOrder));
+    }
+
     // --- Helper Method ---
 
     // Translates a database Order into a safe JSON Response

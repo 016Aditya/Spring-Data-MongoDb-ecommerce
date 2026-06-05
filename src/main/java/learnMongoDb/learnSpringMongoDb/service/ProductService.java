@@ -27,4 +27,18 @@ public class ProductService {
     public Optional<Product> getProductById(String id) {
         return productRepository.findById(id);
     }
+
+    public Product updateProduct(String id, Product updatedData) {
+        // 1. Find the existing product
+        Product existingProduct = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product not found with ID: " + id));
+
+        // 2. Update the fields
+        existingProduct.setName(updatedData.getName());
+        existingProduct.setCategory(updatedData.getCategory());
+        existingProduct.setPrice(updatedData.getPrice());
+
+        // 3. Save and return (MongoDB will automatically update the @LastModifiedDate!)
+        return productRepository.save(existingProduct);
+    }
 }

@@ -24,4 +24,17 @@ public class ReviewService {
     public List<Review> getReviewsByProduct(String productId) {
         return reviewRepository.findByProductId(productId);
     }
+
+    public Review updateReview(String id, Integer rating, String comment) {
+        // 1. Find the existing review
+        Review existingReview = reviewRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Review not found with ID: " + id));
+
+        // 2. Update only the allowed fields
+        existingReview.setRating(rating);
+        existingReview.setComment(comment);
+
+        // 3. Save and return (MongoDB updates the timestamp automatically)
+        return reviewRepository.save(existingReview);
+    }
 }

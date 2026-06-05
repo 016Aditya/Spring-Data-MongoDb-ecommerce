@@ -48,6 +48,24 @@ public class ProductController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<ProductDto.Response> updateProduct(
+            @PathVariable String id,
+            @RequestBody ProductDto.UpdateRequest request) {
+
+        // Map DTO to Entity
+        Product productUpdateData = Product.builder()
+                .name(request.getName())
+                .category(request.getCategory())
+                .price(request.getPrice())
+                .build();
+
+        // Pass the ID from the URL and the data from the Body to the Service
+        Product updatedProduct = productService.updateProduct(id, productUpdateData);
+
+        return ResponseEntity.ok(mapToResponse(updatedProduct));
+    }
+
     // --- Helper Method ---
 
     private ProductDto.Response mapToResponse(Product product) {

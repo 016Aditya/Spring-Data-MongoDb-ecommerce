@@ -48,4 +48,18 @@ public class ShoppingCartController {
         cartService.clearCart(userId);
         return ResponseEntity.ok().build();
     }
+
+    @PutMapping("/{userId}/items")
+    public ResponseEntity<ShoppingCart> updateCartItem(
+            @PathVariable String userId,
+            @RequestBody CartDto.UpdateItemRequest request) {
+
+        ShoppingCart updatedCart = cartService.updateItemQuantity(
+                userId,
+                request.getProductId(),
+                request.getQuantity()
+        );
+
+        return ResponseEntity.ok(updatedCart);
+    }
 }
