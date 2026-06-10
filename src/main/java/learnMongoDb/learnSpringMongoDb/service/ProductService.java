@@ -1,7 +1,7 @@
 package learnMongoDb.learnSpringMongoDb.service;
 
 import learnMongoDb.learnSpringMongoDb.entity.Product;
-import learnMongoDb.learnSpringMongoDb.repository.ProductRepository; // Assuming you fixed the spelling typo here!
+import learnMongoDb.learnSpringMongoDb.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -12,13 +12,15 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ProductService {
 
-    // Lombok's @RequiredArgsConstructor will automatically inject this for us
     private final ProductRepository productRepository;
 
+    // ─── Create ────────────────────────────────────────────────────────────────
+
     public Product createProduct(Product product) {
-        // Business logic could go here (e.g., checking if product name already exists)
         return productRepository.save(product);
     }
+
+    // ─── Read ──────────────────────────────────────────────────────────────────
 
     public List<Product> getAllProducts() {
         return productRepository.findAll();
@@ -28,27 +30,55 @@ public class ProductService {
         return productRepository.findById(id);
     }
 
+    /** All products under a top-level category (e.g. Electronics) */
     public List<Product> getProductsByCategory(String category) {
         return productRepository.findByCategory(category);
     }
 
-    public Product updateProduct(String id, Product updatedData) {
-        // 1. Find the existing product
-        Product existingProduct = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found with ID: " + id));
-
-        // 2. Update the fields
-        existingProduct.setName(updatedData.getName());
-        existingProduct.setCategory(updatedData.getCategory());
-        existingProduct.setPrice(updatedData.getPrice());
-
-        // 3. Save and return (MongoDB will automatically update the @LastModifiedDate!)
-        return productRepository.save(existingProduct);
+    /** All products under a subcategory (e.g. Mobile) */
+    public List<Product> getProductsBySubcategory(String subcategory) {
+        return productRepository.findBySubcategory(subcategory);
     }
 
+    /** Drill-down: category + subcategory (e.g. Electronics > Laptop) */
+    public List<Product> getProductsByCategoryAndSubcategory(String category, String subcategory) {
+        return productRepository.findByCategoryAndSubcategory(category, subcategory);
+    }
+
+    /** Filter by brand */
+    public List<Product> getProductsByBrand(String brand) {
+        return productRepository.findByBrandIgnoreCase(brand);
+    }
+
+    /** Name search */
     public List<Product> searchProductsByName(String keyword) {
         return productRepository.findByNameContainingIgnoreCase(keyword);
     }
+
+    /** Price range filter */
+    public List<Product> getProductsByPriceRange(double min, double max) {
+        return productRepository.findByPriceBetween(min, max);
+    }
+
+    // ─── Update ────────────────────────────────────────────────────────────────
+
+    public Product updateProduct(String id, Product updatedData) {
+        Product existing = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product not found with ID: " + id));
+
+        existing.setName(updatedData.getName());
+        existing.setCategory(updatedData.getCategory());
+        existing.setSubcategory(updatedData.getSubcategory());
+        existing.setBrand(updatedData.getBrand());
+        existing.setPrice(updatedData.getPrice());
+        existing.setStock(updatedData.getStock());
+        existing.setImageUrl(updatedData.getImageUrl());
+        existing.setDescription(updatedData.getDescription());
+
+        return productRepository.save(existing);
+    }
+
+    // ─── Delete ────────────────────────────────────────────────────────────────
 
     public void deleteProduct(String id) {
         productRepository.deleteById(id);
