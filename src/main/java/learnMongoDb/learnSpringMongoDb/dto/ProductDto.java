@@ -9,6 +9,8 @@ public class ProductDto {
         private String name;
         private String category;
         private double price;
+        private String imageUrl;
+        private String description;
     }
 
     @Data
@@ -17,6 +19,8 @@ public class ProductDto {
         private String name;
         private String category;
         private double price;
+        private String imageUrl;
+        private String description;
     }
 
     @Data
@@ -24,5 +28,7 @@ public class ProductDto {
         private String name;
         private String category;
         private double price;
+        private String imageUrl;
+        private String description;
     }
 }

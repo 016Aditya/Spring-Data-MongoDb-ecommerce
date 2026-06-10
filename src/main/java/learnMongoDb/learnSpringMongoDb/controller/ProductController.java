@@ -19,17 +19,15 @@ public class ProductController {
 
     @PostMapping
     public ResponseEntity<ProductDto.Response> createProduct(@RequestBody ProductDto.Request request) {
-        // 1. Map DTO to Entity
         Product productToSave = Product.builder()
                 .name(request.getName())
                 .category(request.getCategory())
                 .price(request.getPrice())
+                .imageUrl(request.getImageUrl())
+                .description(request.getDescription())
                 .build();
 
-        // 2. Save to database
         Product savedProduct = productService.createProduct(productToSave);
-
-        // 3. Map Entity back to DTO
         return ResponseEntity.ok(mapToResponse(savedProduct));
     }
 
@@ -53,16 +51,15 @@ public class ProductController {
             @PathVariable String id,
             @RequestBody ProductDto.UpdateRequest request) {
 
-        // Map DTO to Entity
         Product productUpdateData = Product.builder()
                 .name(request.getName())
                 .category(request.getCategory())
                 .price(request.getPrice())
+                .imageUrl(request.getImageUrl())
+                .description(request.getDescription())
                 .build();
 
-        // Pass the ID from the URL and the data from the Body to the Service
         Product updatedProduct = productService.updateProduct(id, productUpdateData);
-
         return ResponseEntity.ok(mapToResponse(updatedProduct));
     }
 
@@ -88,14 +85,14 @@ public class ProductController {
         return ResponseEntity.noContent().build();
     }
 
-    // --- Helper Method ---
-
     private ProductDto.Response mapToResponse(Product product) {
         ProductDto.Response response = new ProductDto.Response();
         response.setId(product.getId());
         response.setName(product.getName());
         response.setCategory(product.getCategory());
         response.setPrice(product.getPrice());
+        response.setImageUrl(product.getImageUrl());
+        response.setDescription(product.getDescription());
         return response;
     }
 }
