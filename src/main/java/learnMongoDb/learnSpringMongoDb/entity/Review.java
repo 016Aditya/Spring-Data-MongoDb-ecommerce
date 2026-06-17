@@ -1,5 +1,5 @@
 package learnMongoDb.learnSpringMongoDb.entity;
-
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import lombok.Builder;
 import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
@@ -9,6 +9,11 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
 
+@CompoundIndex(
+        name = "user_product_review",
+        def = "{'productId':1,'userId':1}",
+        unique = true
+)
 @Data
 @Builder
 @Document(collection = "reviews")

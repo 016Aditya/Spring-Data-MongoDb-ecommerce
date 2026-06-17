@@ -14,10 +14,33 @@ public class CorsConfig {
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowCredentials(true);
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
-        config.setAllowedHeaders(List.of("*"));
+
+        // ── Allowed origins (add production URL here when deploying) ────────────
+        config.setAllowedOrigins(List.of(
+                "http://localhost:5173",   // Vite dev server
+                "http://localhost:4173"    // Vite preview
+        ));
+
+        // ── Methods ─────────────────────────────────────────────────────────────
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+
+        // ── Headers ─────────────────────────────────────────────────────────────
+        config.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "X-User-Id",
+                "X-Requested-With",
+                "Accept",
+                "Origin"
+        ));
+
+        config.setExposedHeaders(List.of("Authorization"));
+
+        // ── Credentials (cookies / Authorization header) ─────────────────────
+        config.setAllowCredentials(true);
+
+        // ── Cache preflight for 30 minutes — stops the OPTIONS storm ─────────
+        config.setMaxAge(1800L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
