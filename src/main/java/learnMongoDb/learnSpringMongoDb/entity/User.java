@@ -12,10 +12,19 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
 
+/**
+ * User entity.
+ *
+ * Security notes
+ * ──────────────
+ * • passwordHash  – BCrypt-hashed password. Never store / return plain text.
+ * • phoneNumber   – Stored for Forgot-Password identity verification ONLY.
+ *                   No SMS / OTP integration is used.
+ */
 @Data
 @Builder
-@NoArgsConstructor // Added for Jackson JSON deserialization
-@AllArgsConstructor // Required by @Builder when @NoArgsConstructor is present
+@NoArgsConstructor
+@AllArgsConstructor
 @Document(collection = "users")
 public class User {
 
@@ -28,7 +37,14 @@ public class User {
     @Indexed(unique = true)
     private String email;
 
-    private String password;
+    /** BCrypt hash – NEVER the raw password. */
+    private String passwordHash;
+
+    /**
+     * 10-digit mobile number stored for password-recovery identity
+     * verification only.  No SMS / OTP is sent.
+     */
+    private String phoneNumber;
 
     private String role;
 
