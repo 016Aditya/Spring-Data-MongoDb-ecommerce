@@ -1,6 +1,7 @@
 package learnMongoDb.learnSpringMongoDb.controller;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import learnMongoDb.learnSpringMongoDb.dto.UserDto;
 import learnMongoDb.learnSpringMongoDb.entity.User;
 import learnMongoDb.learnSpringMongoDb.service.UserService;
@@ -15,17 +16,17 @@ import java.util.Map;
  * UserController
  *
  * Endpoints
- * ──────────
- * POST /api/users/register             – Create account (includes phoneNumber)
- * POST /api/users/login                – Authenticate
- * GET  /api/users/{id}                 – Get profile by ID
- * PUT  /api/users/{id}                 – Update profile
- * DELETE /api/users/{id}              – Delete account
+ * ----------
+ * POST   /api/users/register          - Create account
+ * POST   /api/users/login             - Authenticate
+ * GET    /api/users/{id}              - Get profile by ID
+ * PUT    /api/users/{id}              - Update profile
+ * DELETE /api/users/{id}             - Delete account
  *
- * Forgot Password flow (no tokens / SMS)
- * POST /api/users/forgot-password      – Step 1: check email exists
- * POST /api/users/verify-identity      – Step 2: email + phone must match
- * POST /api/users/reset-password       – Step 3: set new password
+ * Forgot Password (no tokens / SMS)
+ * POST   /api/users/forgot-password  - Step 1: check email exists
+ * POST   /api/users/verify-identity  - Step 2: email + phone must match
+ * POST   /api/users/reset-password   - Step 3: set new password
  */
 @RestController
 @RequestMapping("/api/users")
@@ -34,7 +35,7 @@ public class UserController {
 
     private final UserService userService;
 
-    // ── Register ────────────────────────────────────────────────────────────
+    // Register ---------------------------------------------------------------
 
     @PostMapping("/register")
     public ResponseEntity<UserDto.Response> registerUser(
@@ -44,8 +45,6 @@ public class UserController {
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
                 .email(request.getEmail())
-                // Map incoming plain-text password to passwordHash field;
-                // UserService.createUser() will BCrypt-encode it before saving.
                 .passwordHash(request.getPassword())
                 .phoneNumber(request.getPhoneNumber())
                 .build();
@@ -54,7 +53,7 @@ public class UserController {
         return ResponseEntity.ok(mapToResponse(savedUser));
     }
 
-    // ── Login ───────────────────────────────────────────────────────────────
+    // Login ------------------------------------------------------------------
 
     @PostMapping("/login")
     public ResponseEntity<UserDto.Response> loginUser(
@@ -67,7 +66,7 @@ public class UserController {
         return ResponseEntity.ok(mapToResponse(loggedInUser));
     }
 
-    // ── Get by ID ──────────────────────────────────────────────────────────
+    // Get by ID --------------------------------------------------------------
 
     @GetMapping("/{id}")
     public ResponseEntity<UserDto.Response> getUserById(@PathVariable String id) {
@@ -76,7 +75,7 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── Update profile ──────────────────────────────────────────────────────
+    // Update profile ---------------------------------------------------------
 
     @PutMapping("/{id}")
     public ResponseEntity<UserDto.Response> updateUserProfile(
@@ -92,7 +91,7 @@ public class UserController {
         return ResponseEntity.ok(mapToResponse(updatedUser));
     }
 
-    // ── Delete ─────────────────────────────────────────────────────────────
+    // Delete -----------------------------------------------------------------
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable String id) {
@@ -100,23 +99,17 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── Forgot Password – Step 1: verify email ─────────────────────────────
+    // Forgot Password - Step 1 -----------------------------------------------
 
-    /**
-     * Returns a generic OK regardless of whether the email exists
-     * to prevent email-enumeration attacks.
-     */
     @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, String>> forgotPassword(
             @Valid @RequestBody UserDto.ForgotPasswordRequest request) {
-
-        // We deliberately do NOT expose whether the email was found
         userService.emailExists(request.getEmail());
         return ResponseEntity.ok(Map.of(
                 "message", "If an account with that email exists, you can proceed."));
     }
 
-    // ── Forgot Password – Step 2: verify identity ─────────────────────────
+    // Forgot Password - Step 2 -----------------------------------------------
 
     @PostMapping("/verify-identity")
     public ResponseEntity<Map<String, Object>> verifyIdentity(
@@ -127,7 +120,6 @@ public class UserController {
                 request.getPhoneNumber());
 
         if (!verified) {
-            // Generic message – never reveal which field failed
             return ResponseEntity.badRequest()
                     .body(Map.of(
                             "verified", false,
@@ -139,7 +131,7 @@ public class UserController {
                 "message", "Identity verified. You may now set a new password."));
     }
 
-    // ── Forgot Password – Step 3: reset password ──────────────────────────
+    // Forgot Password - Step 3 -----------------------------------------------
 
     @PostMapping("/reset-password")
     public ResponseEntity<Map<String, String>> resetPassword(
@@ -153,7 +145,7 @@ public class UserController {
         return ResponseEntity.ok(Map.of("message", "Password reset successfully."));
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    // Helpers ----------------------------------------------------------------
 
     private UserDto.Response mapToResponse(User user) {
         UserDto.Response response = new UserDto.Response();
@@ -163,14 +155,23 @@ public class UserController {
         response.setEmail(user.getEmail());
         response.setRole(user.getRole());
         response.setCreatedAt(user.getCreatedAt());
-        // passwordHash and phoneNumber are intentionally excluded
         return response;
     }
 
-    // Inline DTO for login – only needs email + password
+    // Inline Login DTO -------------------------------------------------------
+
+    /**
+     * Root cause fix: added @Valid on the handler parameter AND @NotBlank
+     * on both fields. Without @Valid the constraints are never evaluated
+     * and null values silently reach UserService.loginUser(), causing NPE.
+     */
     @Data
     public static class LoginRequest {
+
+        @NotBlank(message = "Email is required")
         private String email;
+
+        @NotBlank(message = "Password is required")
         private String password;
     }
 }
