@@ -30,7 +30,8 @@ public class ProductController {
      *   "price":       79999,
      *   "stock":       50,
      *   "imageUrl":    "https://...",
-     *   "description": "Latest Samsung flagship"
+     *   "description": "Latest Samsung flagship",
+     *   "featured":    true
      * }
      */
     @PostMapping
@@ -53,6 +54,20 @@ public class ProductController {
         return productService.getProductById(id)
                 .map(p -> ResponseEntity.ok(toResponse(p)))
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // ─── READ – featured ──────────────────────────────────────────────────────
+
+    /**
+     * GET /api/products/featured
+     * Returns all products where featured = true.
+     * Used by the React homepage FeaturedProducts section.
+     * Returns 200 with an empty array [] if no products are featured yet
+     * (the frontend hook falls back to latest-6 in that case).
+     */
+    @GetMapping("/featured")
+    public ResponseEntity<List<ProductDto.Response>> getFeaturedProducts() {
+        return ResponseEntity.ok(mapList(productService.getFeaturedProducts()));
     }
 
     // ─── READ – category / subcategory filters ────────────────────────────────
@@ -134,9 +149,22 @@ public class ProductController {
                 .stock(request.getStock())
                 .imageUrl(request.getImageUrl())
                 .description(request.getDescription())
+                .featured(request.isFeatured())   // ✅ was missing before
                 .build();
 
         return ResponseEntity.ok(toResponse(productService.updateProduct(id, updateData)));
+    }
+
+    /**
+     * PATCH /api/products/{id}/featured?featured=true
+     * Lightweight admin endpoint to toggle featured without a full PUT.
+     * Example: PATCH /api/products/abc123/featured?featured=true
+     */
+    @PatchMapping("/{id}/featured")
+    public ResponseEntity<ProductDto.Response> toggleFeatured(
+            @PathVariable String id,
+            @RequestParam boolean featured) {
+        return ResponseEntity.ok(toResponse(productService.toggleFeatured(id, featured)));
     }
 
     // ─── DELETE ────────────────────────────────────────────────────────────────
@@ -160,6 +188,7 @@ public class ProductController {
                 .stock(r.getStock())
                 .imageUrl(r.getImageUrl())
                 .description(r.getDescription())
+                .featured(r.isFeatured())
                 .build();
     }
 
@@ -174,6 +203,9 @@ public class ProductController {
         res.setStock(p.getStock());
         res.setImageUrl(p.getImageUrl());
         res.setDescription(p.getDescription());
+        res.setFeatured(p.isFeatured());                                  // ✅ was missing
+        res.setAverageRating(p.getAverageRating() != null ? p.getAverageRating() : 0.0);   // ✅ was missing
+        res.setTotalRatings(p.getTotalRatings() != null ? p.getTotalRatings() : 0);        // ✅ was missing
         return res;
     }
 
