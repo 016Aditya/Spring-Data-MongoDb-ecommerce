@@ -28,14 +28,14 @@ public class DatabaseSeeder implements CommandLineRunner {
 
         System.out.println("DATABASE SEEDER EXECUTED");
 
-        // ── Products ────────────────────────────────────────────────────────
+        // ── Products ─────────────────────────────────────────────────────────────
         if (productRepository.count() > 0) {
             System.out.println("Products already exist. Skipping product seed.");
         } else {
             seedProducts();
         }
 
-        // ── Sample orders ────────────────────────────────────────────────────
+        // ── Sample orders ─────────────────────────────────────────────────────
         // Seed a small set of demo orders so the Orders page is never empty.
         // Guard: skip if any orders already exist for the demo user.
         if (orderRepository.existsByUserId(DEMO_USER_ID)) {
@@ -67,9 +67,9 @@ public class DatabaseSeeder implements CommandLineRunner {
                 .filter(p -> p.getName() != null && p.getName().contains("Levi"))
                 .findFirst().orElse(null);
 
+        // Address entity has: line1, city, state, zipCode, country
+        // (no `name` or `phone` fields — removed to match the entity)
         Address kolkataAddress = Address.builder()
-                .name("Aditya Singh")
-                .phone("9876543210")
                 .line1("704, Tagore Nagar, Kolkata - 07")
                 .city("Kolkata")
                 .state("West Bengal")
@@ -77,7 +77,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                 .country("India")
                 .build();
 
-        // Order 1 — DELIVERED (iPhone 17 Pro Max)
+        // Order 1 ─ DELIVERED (iPhone 17 Pro Max)
         if (iphone != null) {
             double unitPrice = iphone.getPrice();
             OrderItem snap = OrderItem.builder()
@@ -101,7 +101,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             System.out.println("Seeded DELIVERED order — " + iphone.getName());
         }
 
-        // Order 2 — PENDING (Sony WH-1000XM5 + Levi's jeans)
+        // Order 2 ─ PENDING (Sony WH-1000XM5 + Levi's jeans)
         if (sony != null && levis != null) {
             double sonyPrice  = sony.getPrice();
             double levisPrice = levis.getPrice();
@@ -138,7 +138,7 @@ public class DatabaseSeeder implements CommandLineRunner {
             System.out.println("Seeded PENDING order — Sony + Levi's");
         }
 
-        // Order 3 — CANCELLED (Levi's jeans)
+        // Order 3 ─ CANCELLED (Levi's jeans)
         if (levis != null) {
             double unitPrice = levis.getPrice();
             OrderItem snap = OrderItem.builder()
@@ -173,7 +173,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 
         List<Product> products = List.of(
 
-                // ── ELECTRONICS – Mobile ──────────────────────────────────────
+                // ── ELECTRONICS – Mobile ─────────────────────────────────────────────
                 Product.builder()
                         .name("Samsung Galaxy S25 Ultra")
                         .category("Electronics").subcategory("Mobile").brand("Samsung")
@@ -206,7 +206,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://rukminim2.flixcart.com/image/480/640/xif0q/mobile/u/b/t/-original-imahgqnzzc6cgggb.jpeg?q=90")
                         .build(),
 
-                // ── ELECTRONICS – Laptop ──────────────────────────────────────
+                // ── ELECTRONICS – Laptop ─────────────────────────────────────────────
                 Product.builder()
                         .name("Apple MacBook Air M3 15\" 8GB/256GB")
                         .category("Electronics").subcategory("Laptop").brand("Apple")
@@ -231,7 +231,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://ehpworld.com/wp-content/uploads/2021/10/HP-Pavilion-Gaming-15-EC2008AX-Front.jpg")
                         .build(),
 
-                // ── ELECTRONICS – Headphones ──────────────────────────────────
+                // ── ELECTRONICS – Headphones ──────────────────────────────────────────
                 Product.builder()
                         .name("Sony WH-1000XM5 Wireless Headphones")
                         .category("Electronics").subcategory("Headphones").brand("Sony")
@@ -248,7 +248,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://rukminim2.flixcart.com/image/1536/1536/kmccosw0/headphone/9/h/j/rockerz-450-pro-boat-original-imagf9gyd4u6w85z.jpeg?q=90")
                         .build(),
 
-                // ── ELECTRONICS – TV ──────────────────────────────────────────
+                // ── ELECTRONICS – TV ────────────────────────────────────────────────
                 Product.builder()
                         .name("LG 55\" 4K OLED Smart TV C3")
                         .category("Electronics").subcategory("TV").brand("LG")
@@ -273,7 +273,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://rukminim2.flixcart.com/image/1536/1536/xif0q/television/p/g/5/-original-imahggetxjeguqga.jpeg?q=90")
                         .build(),
 
-                // ── ELECTRONICS – Camera ──────────────────────────────────────
+                // ── ELECTRONICS – Camera ─────────────────────────────────────────────
                 Product.builder()
                         .name("Canon EOS R50 RF-S18-45mm STM Mirrorless Camera (Black)- 24.2 MP")
                         .category("Electronics").subcategory("Camera").brand("Canon")
@@ -286,11 +286,11 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .name("SONY Alpha ILCE-6600M APS-C Mirrorless Camera with 18-135 mm Zoom Lens (Black)- 24.2 MP")
                         .category("Electronics").subcategory("Camera").brand("SONY")
                         .price(89000.0).stock(31)
-                        .description("Shoot what you like with the \u03b16600 from Sony. This camera features the Optical Stabilisation feature to provide you with shake-free images, AI-based Subject Tracking to help you track the face and eyes of the subject, High-capacity Z Battery to make sure that you can shoot for long hours without any hassle.")
+                        .description("Shoot what you like with the \u03b16600 from Sony.")
                         .imageUrl("https://rukminim2.flixcart.com/image/1536/1536/k3q76a80/camera/k/7/9/sony-apsc-ilce-6600m-b-in5-mirrorless-original-imafm6nvxhybpwhs.jpeg?q=90")
                         .build(),
 
-                // ── CLOTHING – Shirt ──────────────────────────────────────────
+                // ── CLOTHING – Shirt ─────────────────────────────────────────────────
                 Product.builder()
                         .name("Allen Solly Slim Fit Formal Shirt")
                         .category("Clothing").subcategory("Shirt").brand("Allen Solly")
@@ -307,7 +307,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRYfBel3Z2FMy_P2XZxpCwfgBMgWX1HNuWzA&s")
                         .build(),
 
-                // ── CLOTHING – Jeans ──────────────────────────────────────────
+                // ── CLOTHING – Jeans ─────────────────────────────────────────────────
                 Product.builder()
                         .name("Levi's 511 Slim Fit Jeans")
                         .category("Clothing").subcategory("Jeans").brand("Levis")
@@ -324,7 +324,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://d1pdzcnm6xgxlz.cloudfront.net/bottoms/8905875444640-9.jpg")
                         .build(),
 
-                // ── CLOTHING – Shoes ──────────────────────────────────────────
+                // ── CLOTHING – Shoes ─────────────────────────────────────────────────
                 Product.builder()
                         .name("Nike Air Max 270 React")
                         .category("Clothing").subcategory("Shoes").brand("Nike")
@@ -345,7 +345,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .name("McLAREN RACING Speedcat Sneakers")
                         .category("Clothing").subcategory("Shoes").brand("Adidas")
                         .price(10999.0).stock(45)
-                        .description("Motorsport isn't just a vibe \u2013 it's an energy. These lifestyle.")
+                        .description("Motorsport isn't just a vibe – it's an energy. These lifestyle.")
                         .imageUrl("https://images.puma.com/image/upload/f_auto,q_auto,b_rgb:fafafa,w_750,h_750/global/309452/01/fnd/IND/fmt/png/McLAREN-RACING-Speedcat-Sneakers")
                         .build(),
 
@@ -353,11 +353,11 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .name("Air Jordan 1 Mid SE")
                         .category("Clothing").subcategory("Shoes").brand("Adidas")
                         .price(12295.0).stock(47)
-                        .description("Inspired by the original AJ1, this mid-top edition maintains the iconic look you love while choice colours and crisp leather give it a distinct identity.")
+                        .description("Inspired by the original AJ1, this mid-top edition maintains the iconic look.")
                         .imageUrl("https://adn-static1.nykaa.com/nykdesignstudio-images/pub/media/catalog/product/c/e/ce80759Nike-II3789-001_1.jpg?rnd=20200526195200&tr=w-1080")
                         .build(),
 
-                // ── CLOTHING – Dress ──────────────────────────────────────────
+                // ── CLOTHING – Dress ────────────────────────────────────────────────
                 Product.builder()
                         .name("W Women's Polka Dress")
                         .category("Clothing").subcategory("Dress").brand("W")
@@ -374,7 +374,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://assets.ajio.com/medias/sys_master/root/20240705/Fwga/6687433d1d763220faeb534f/-473Wx593H-700163809-peach-MODEL.jpg")
                         .build(),
 
-                // ── CLOTHING – Jacket ─────────────────────────────────────────
+                // ── CLOTHING – Jacket ───────────────────────────────────────────────
                 Product.builder()
                         .name("The North Face Thermoball Eco Jacket")
                         .category("Clothing").subcategory("Jacket").brand("The North Face")
@@ -383,7 +383,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://assets.thenorthface.com/images/t_Thumbnail/v1762369809/NF0A8D1PBRI-HERO/Mens-THERMOBALL-Jacket-TNF-HERO.png")
                         .build(),
 
-                // ── CLOTHING – Kurta ──────────────────────────────────────────
+                // ── CLOTHING – Kurta ────────────────────────────────────────────────
                 Product.builder()
                         .name("Manyavar Men's Silk Kurta Set")
                         .category("Clothing").subcategory("Kurta").brand("Manyavar")
@@ -392,7 +392,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://ik.imagekit.io/4sjmoqtje/tr:w-1000,c-at_max/cdn/shop/files/mustard-yellow-silk-kurta-set-for-men-with-floral-resham-work-sg356826-1.jpg?v=1759832614")
                         .build(),
 
-                // ── BOOKS – Novel ─────────────────────────────────────────────
+                // ── BOOKS – Novel ───────────────────────────────────────────────────
                 Product.builder()
                         .name("Atomic Habits by James Clear")
                         .category("Books").subcategory("Novel").brand("Penguin")
@@ -417,12 +417,12 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://m.media-amazon.com/images/I/71HJj3XmheL._AC_UF1000,1000_QL80_.jpg")
                         .build(),
 
-                // ── BOOKS – Textbook ──────────────────────────────────────────
+                // ── BOOKS – Textbook ────────────────────────────────────────────────
                 Product.builder()
                         .name("Introduction to Algorithms (CLRS)")
                         .category("Books").subcategory("Textbook").brand("MIT Press")
                         .price(2499.0).stock(80)
-                        .description("The bible of algorithms \u2014 comprehensive coverage of data structures and algorithms.")
+                        .description("The bible of algorithms — comprehensive coverage of data structures and algorithms.")
                         .imageUrl("https://covers.openlibrary.org/b/isbn/9780262033848-L.jpg")
                         .build(),
 
@@ -438,7 +438,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .name("DUNE by Frank Herbert")
                         .category("Books").subcategory("Textbook").brand("ACE")
                         .price(799.0).stock(120)
-                        .description("Frank Herbert's classic masterpiece\u2014a triumph of the imagination and one of the bestselling science fiction novels of all time.")
+                        .description("Frank Herbert's classic masterpiece—a triumph of the imagination.")
                         .imageUrl("https://m.media-amazon.com/images/S/compressed.photo.goodreads.com/books/1555447414i/44767458.jpg")
                         .build(),
 
@@ -446,11 +446,11 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .name("DUNE Messiah by Frank Herbert")
                         .category("Books").subcategory("Textbook").brand("ACE")
                         .price(799.0).stock(120)
-                        .description("Frank Herbert's classic masterpiece\u2014a triumph of the imagination and one of the bestselling science fiction novels of all time.")
+                        .description("Frank Herbert's classic masterpiece—a triumph of the imagination.")
                         .imageUrl("https://m.media-amazon.com/images/I/91NXYT-nAKL._UF1000,1000_QL80_.jpg")
                         .build(),
 
-                // ── BOOKS – Stationery ─────────────────────────────────────────
+                // ── BOOKS – Stationery ───────────────────────────────────────────────
                 Product.builder()
                         .name("Classmate Premium Notebook Pack of 6")
                         .category("Books").subcategory("Stationery").brand("Classmate")
@@ -459,7 +459,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://m.media-amazon.com/images/I/81DAhBaZ39L._AC_UF1000,1000_QL80_.jpg")
                         .build(),
 
-                // ── BOOKS – Comics ───────────────────────────────────────────
+                // ── BOOKS – Comics ─────────────────────────────────────────────────
                 Product.builder()
                         .name("Amar Chitra Katha Box Set of 20")
                         .category("Books").subcategory("Comics").brand("ACK Media")
@@ -476,12 +476,12 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://i.marvelousnews.com/g/generated/Comics/Iron-Man/06/IM2026006_Cover__scaled_800.jpg")
                         .build(),
 
-                // ── HOME – Furniture ──────────────────────────────────────────
+                // ── HOME – Furniture ──────────────────────────────────────────────────
                 Product.builder()
                         .name("Nilkamal Plastic Folding Table 4 Seater")
                         .category("Home").subcategory("Furniture").brand("Nilkamal")
                         .price(3499.0).stock(40)
-                        .description("Weather-resistant, 3 Year warranty, foldable for easy storage, ideal for indoor/outdoor.")
+                        .description("Weather-resistant, 3 Year warranty, foldable for easy storage.")
                         .imageUrl("https://www.nilkamalfurniture.com/cdn/shop/files/FESTIVEBRN_f65458d7-5872-4581-8e16-63f6108bc740.jpg?v=1773825261&width=720")
                         .build(),
 
@@ -497,11 +497,11 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .name("Homall Gaming Chair High Back PU Leather Desk Chair")
                         .category("Home").subcategory("Furniture").brand("Wakefit")
                         .price(84999.0).stock(15)
-                        .description("High density shaping foam, more comfortable, elasticity resilience and service life. 1.8mm thick steel frame, more sturdy and stable. Pu Leather, skin friendly and wear resisting.")
+                        .description("High density shaping foam, 1.8mm thick steel frame. PU Leather.")
                         .imageUrl("https://m.media-amazon.com/images/I/71WYmPG9WoL._SL1500_.jpg")
                         .build(),
 
-                // ── HOME – Kitchen ──────────────────────────────────────────
+                // ── HOME – Kitchen ──────────────────────────────────────────────────
                 Product.builder()
                         .name("Prestige Iris 750W Mixer Grinder 3 Jars")
                         .category("Home").subcategory("Kitchen").brand("Prestige")
@@ -514,11 +514,11 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .name("Instant Pot Duo 7-in-1 Electric Pressure Cooker")
                         .category("Home").subcategory("Kitchen").brand("Instant Pot")
                         .price(7999.0).stock(35)
-                        .description("Pressure cooker, slow cooker, rice cooker, steamer, saut\u00e9, warmer.")
+                        .description("Pressure cooker, slow cooker, rice cooker, steamer, sauté, warmer.")
                         .imageUrl("https://rukminim2.flixcart.com/image/480/640/xif0q/electric-cooker/9/j/0/-original-imahkq7fznzh5tmh.jpeg?q=20")
                         .build(),
 
-                // ── HOME – Decor ───────────────────────────────────────────
+                // ── HOME – Decor ───────────────────────────────────────────────────
                 Product.builder()
                         .name("Tied Ribbons Wall Clock Modern Art")
                         .category("Home").subcategory("Decor").brand("Tied Ribbons")
@@ -535,7 +535,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQeFS1OaYZMDMfNC18xBbBdJCjVKYiuhxVa7A&s")
                         .build(),
 
-                // ── SPORTS – Cricket ──────────────────────────────────────────
+                // ── SPORTS – Cricket ─────────────────────────────────────────────────
                 Product.builder()
                         .name("SS Ton Kashmir Willow Cricket Bat")
                         .category("Sports").subcategory("Cricket").brand("SS")
@@ -552,7 +552,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://m.media-amazon.com/images/I/51cvQ2deD3L._AC_UF894,1000_QL80_.jpg")
                         .build(),
 
-                // ── SPORTS – Football ─────────────────────────────────────────
+                // ── SPORTS – Football ───────────────────────────────────────────────
                 Product.builder()
                         .name("Nivia Storm Football Size 5")
                         .category("Sports").subcategory("Football").brand("Nivia")
@@ -561,7 +561,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://m.media-amazon.com/images/I/71tB-sMtkQL._AC_UF894,1000_QL80_.jpg")
                         .build(),
 
-                // ── SPORTS – Fitness ──────────────────────────────────────────
+                // ── SPORTS – Fitness ───────────────────────────────────────────────
                 Product.builder()
                         .name("Boldfit Resistance Bands Set of 5")
                         .category("Sports").subcategory("Fitness").brand("Boldfit")

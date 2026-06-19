@@ -16,8 +16,12 @@ public interface OrderRepository extends MongoRepository<Order, String> {
     @Query(value = "{'address.city': ?0 }", fields = "{'_id':1, 'quantity':1}")
     List<Order> findbyCity(String city);
 
-    // New method added to support the User entity
     List<Order> findByUserId(String userId);
 
-
+    /**
+     * Returns true when at least one order exists for the given userId.
+     * Spring Data derives the query automatically from the method name.
+     * Used by DatabaseSeeder to skip re-seeding demo orders on restart.
+     */
+    boolean existsByUserId(String userId);
 }
