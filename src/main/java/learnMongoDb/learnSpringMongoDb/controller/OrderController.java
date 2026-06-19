@@ -2,15 +2,23 @@ package learnMongoDb.learnSpringMongoDb.controller;
 
 import learnMongoDb.learnSpringMongoDb.dto.OrderDto;
 import learnMongoDb.learnSpringMongoDb.entity.Order;
-import learnMongoDb.learnSpringMongoDb.entity.Product;
+import learnMongoDb.learnSpringMongoDb.entity.OrderItem;
 import learnMongoDb.learnSpringMongoDb.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * OrderController — REST API for orders.
+ *
+ * All write paths delegate snapshot-building to OrderService.
+ * mapToResponse() always populates the items list so the frontend
+ * never receives an order without product details.
+ */
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
@@ -18,81 +26,98 @@ public class OrderController {
 
     private final OrderService orderService;
 
+    // ── POST /api/orders ─────────────────────────────────────────────────────
+
     @PostMapping
-    public ResponseEntity<OrderDto.Response> createOrder(@RequestBody OrderDto.Request request) {
+    public ResponseEntity<OrderDto.Response> createOrder(
+            @RequestBody OrderDto.Request request) {
 
-        // 1. Map the string IDs from the DTO into a list of Product entities (with just the ID set)
-        List<Product> requestedProducts = request.getProductIds().stream()
-                .map(id -> Product.builder().id(id).build())
-                .collect(Collectors.toList());
+        Order saved = orderService.createOrder(
+                request.getProductIds(),
+                request.getUserId(),
+                request.getAddress());
 
-        // 2. Build the raw Order entity for the Service layer
-        Order orderToProcess = Order.builder()
-                .userId(request.getUserId())
-                .quantity(request.getQuantity())
-                .address(request.getAddress())
-                .products(requestedProducts)
-                .build();
-
-        // 3. Let the Service validate prices and save to MongoDB
-        Order savedOrder = orderService.createOrder(orderToProcess);
-
-        // 4. Map the database result back to a clean Response DTO
-        return ResponseEntity.ok(mapToResponse(savedOrder));
+        return ResponseEntity.ok(mapToResponse(saved));
     }
 
-    @GetMapping("/city/{city}")
-    public ResponseEntity<List<OrderDto.Response>> getOrdersByCity(@PathVariable String city) {
-        List<OrderDto.Response> responses = orderService.getOrdersByCity(city).stream()
-                .map(this::mapToResponse) // Maps every order in the list to a DTO
-                .collect(Collectors.toList());
-        return ResponseEntity.ok(responses);
-    }
+    // ── GET /api/orders/user/{userId} ────────────────────────────────────────
 
-    @GetMapping("/status")
-    public ResponseEntity<List<OrderDto.Response>> getOrdersByStatusAndPrice(
-            @RequestParam String status,
-            @RequestParam double minPrice) {
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<OrderDto.Response>> getOrdersByUser(
+            @PathVariable String userId) {
 
-        List<OrderDto.Response> responses = orderService.getOrdersByStatusAndPrice(status, minPrice).stream()
+        List<OrderDto.Response> responses = orderService.getOrdersByUserId(userId)
+                .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(responses);
     }
+
+    // ── GET /api/orders/{id} ─────────────────────────────────────────────────
+
+    @GetMapping("/{id}")
+    public ResponseEntity<OrderDto.Response> getOrderById(
+            @PathVariable String id) {
+
+        return ResponseEntity.ok(mapToResponse(orderService.getOrderById(id)));
+    }
+
+    // ── PATCH /api/orders/{id}/status ────────────────────────────────────────
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<OrderDto.Response> updateOrderStatus(
             @PathVariable String id,
             @RequestBody OrderDto.UpdateStatusRequest request) {
 
-        Order updatedOrder = orderService.updateOrderStatus(id, request.getStatus());
-
-        return ResponseEntity.ok(mapToResponse(updatedOrder));
+        Order updated = orderService.updateOrderStatus(id, request.getStatus());
+        return ResponseEntity.ok(mapToResponse(updated));
     }
 
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<OrderDto.Response>> getOrdersByUser(@PathVariable String userId) {
-        List<OrderDto.Response> responses = orderService.getOrdersByUserId(userId).stream()
+    // ── GET /api/orders/city/{city} ──────────────────────────────────────────
+
+    @GetMapping("/city/{city}")
+    public ResponseEntity<List<OrderDto.Response>> getOrdersByCity(
+            @PathVariable String city) {
+
+        List<OrderDto.Response> responses = orderService.getOrdersByCity(city)
+                .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(responses);
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<OrderDto.Response> getOrderById(@PathVariable String id) {
-        Order order = orderService.getOrderById(id);
-        return ResponseEntity.ok(mapToResponse(order));
+    // ── GET /api/orders/status ───────────────────────────────────────────────
+
+    @GetMapping("/status")
+    public ResponseEntity<List<OrderDto.Response>> getOrdersByStatusAndPrice(
+            @RequestParam String status,
+            @RequestParam double minPrice) {
+
+        List<OrderDto.Response> responses =
+                orderService.getOrdersByStatusAndPrice(status, minPrice)
+                        .stream()
+                        .map(this::mapToResponse)
+                        .collect(Collectors.toList());
+        return ResponseEntity.ok(responses);
     }
+
+    // ── DELETE /api/orders/{id} ──────────────────────────────────────────────
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteOrder(@PathVariable String id) {
         orderService.deleteOrder(id);
-        return ResponseEntity.noContent().build(); // Returns a clean 204
+        return ResponseEntity.noContent().build();
     }
 
-    // --- Helper Method ---
+    // ── Mapping helper ───────────────────────────────────────────────────────
 
-    // Translates a database Order into a safe JSON Response
+    /**
+     * Translates an Order entity into a safe JSON Response DTO.
+     *
+     * items is always populated — even for legacy orders that were seeded
+     * before the snapshot migration (those will have an empty list which
+     * the frontend's normalizeOrder() handles gracefully).
+     */
     private OrderDto.Response mapToResponse(Order order) {
         OrderDto.Response response = new OrderDto.Response();
         response.setId(order.getId());
@@ -102,6 +127,26 @@ public class OrderController {
         response.setStatus(order.getStatus());
         response.setAddress(order.getAddress());
         response.setCreatedAt(order.getCreatedAt());
+
+        // Map each embedded OrderItem snapshot to the response DTO.
+        // Never returns null — always at least an empty list.
+        List<OrderItem> items =
+                order.getItems() != null ? order.getItems() : Collections.emptyList();
+
+        List<OrderDto.OrderItemResponse> itemResponses = items.stream()
+                .map(item -> {
+                    OrderDto.OrderItemResponse ir = new OrderDto.OrderItemResponse();
+                    ir.setProductId(item.getProductId());
+                    ir.setProductName(item.getProductName());
+                    ir.setProductImage(item.getProductImage());
+                    ir.setPrice(item.getPrice());
+                    ir.setQuantity(item.getQuantity());
+                    ir.setTotalPrice(item.getTotalPrice());
+                    return ir;
+                })
+                .collect(Collectors.toList());
+
+        response.setItems(itemResponses);
         return response;
     }
 }
