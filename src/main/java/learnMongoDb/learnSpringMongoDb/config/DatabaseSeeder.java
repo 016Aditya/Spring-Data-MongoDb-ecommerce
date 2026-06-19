@@ -1,52 +1,35 @@
 package learnMongoDb.learnSpringMongoDb.config;
 
-import learnMongoDb.learnSpringMongoDb.entity.Address;
-import learnMongoDb.learnSpringMongoDb.entity.Order;
-import learnMongoDb.learnSpringMongoDb.entity.OrderItem;
 import learnMongoDb.learnSpringMongoDb.entity.Product;
-import learnMongoDb.learnSpringMongoDb.repository.OrderRepository;
 import learnMongoDb.learnSpringMongoDb.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * DatabaseSeeder — runs once on startup if the products collection is empty.
- *
- * Seeded orders now contain full OrderItem snapshots so the frontend
- * can render the Orders page and Order Detail page immediately without
- * any product lookups.
+ * DatabaseSeeder — seeds the products collection on first startup.
+ * Runs only when the products collection is empty.
+ * Orders are NOT seeded here — they are created naturally via checkout.
  */
 @Component
 @RequiredArgsConstructor
 public class DatabaseSeeder implements CommandLineRunner {
 
     private final ProductRepository productRepository;
-    private final OrderRepository   orderRepository;
 
     @Override
     public void run(String... args) {
 
         System.out.println("DATABASE SEEDER EXECUTED");
 
-        // ── Products ─────────────────────────────────────────────────────────
         if (productRepository.count() > 0) {
             System.out.println("Products already exist. Skipping product seed.");
-        } else {
-            seedProducts();
+            return;
         }
 
-        // ── Orders ───────────────────────────────────────────────────────────
-        // Re-seed orders every time so that they always carry proper snapshots
-        // (safe because orders reference no external documents).
-        if (orderRepository.count() == 0) {
-            seedOrders();
-        } else {
-            System.out.println("Orders already exist. Skipping order seed.");
-        }
+        seedProducts();
     }
 
     // =========================================================================
@@ -194,113 +177,5 @@ public class DatabaseSeeder implements CommandLineRunner {
 
         productRepository.saveAll(products);
         System.out.println("Seeded " + products.size() + " products.");
-    }
-
-    // =========================================================================
-    // Orders  — seeded with full product snapshots
-    // =========================================================================
-
-    private void seedOrders() {
-
-        // ── Shared address ────────────────────────────────────────────────────
-        Address kolkata = Address.builder()
-                .line1("704, Tagore Nagar")
-                .city("Kolkata")
-                .state("West Bengal")
-                .zipCode("700007")
-                .country("India")
-                .build();
-
-        // ── Order 1 — two-item order (iPhone + MacBook) ───────────────────────
-        OrderItem iphoneSnapshot = OrderItem.builder()
-                .productId("seed-prod-iphone17")
-                .productName("iPhone 17 Pro Max 256GB")
-                .productImage("https://cdn.jiostore.online/v2/jmd-asp/jdprod/wrkr/products/pictures/item/free/original/apple/494741644/0/zp5lPcLphV-w2UMH0w2JC-AppleiPhone17ProMax-MP-494741644-i-1-1200Wx1200H.jpeg")
-                .price(134900.0)
-                .quantity(1)
-                .totalPrice(134900.0)
-                .build();
-
-        Order order1 = Order.builder()
-                .userId("seed-user-aditya")
-                .items(List.of(iphoneSnapshot))
-                .quantity(1)
-                .totalPrice(134900.0)
-                .status("DELIVERED")
-                .address(kolkata)
-                .createdAt(LocalDateTime.now().minusDays(30))
-                .build();
-
-        // ── Order 2 — Samsung Galaxy (cancelled) ──────────────────────────────
-        OrderItem galaxySnapshot = OrderItem.builder()
-                .productId("seed-prod-galaxy-s25")
-                .productName("Samsung Galaxy S25 Ultra")
-                .productImage("https://m.media-amazon.com/images/I/71tz3adVWaL.jpg")
-                .price(99999.0)
-                .quantity(1)
-                .totalPrice(99999.0)
-                .build();
-
-        Order order2 = Order.builder()
-                .userId("seed-user-aditya")
-                .items(List.of(galaxySnapshot))
-                .quantity(1)
-                .totalPrice(99999.0)
-                .status("CANCELLED")
-                .address(kolkata)
-                .createdAt(LocalDateTime.now().minusDays(15))
-                .build();
-
-        // ── Order 3 — OnePlus 15 (pending) ───────────────────────────────────
-        OrderItem oneplusSnapshot = OrderItem.builder()
-                .productId("seed-prod-oneplus15")
-                .productName("OnePlus 15 256GB/16GB")
-                .productImage("https://m.media-amazon.com/images/I/61KXgizurpL._AC_UF1000,1000_QL80_.jpg")
-                .price(69999.0)
-                .quantity(1)
-                .totalPrice(69999.0)
-                .build();
-
-        Order order3 = Order.builder()
-                .userId("seed-user-aditya")
-                .items(List.of(oneplusSnapshot))
-                .quantity(1)
-                .totalPrice(69999.0)
-                .status("SHIPPED")
-                .address(kolkata)
-                .createdAt(LocalDateTime.now().minusDays(5))
-                .build();
-
-        // ── Order 4 — multi-item (Dell XPS + Sony Headphones) ─────────────────
-        OrderItem dellSnapshot = OrderItem.builder()
-                .productId("seed-prod-dell-xps")
-                .productName("Dell XPS 15 Core i9 RTX 4060")
-                .productImage("https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/dell-client-products/notebooks/xps-notebooks/xps-15-9530/media-gallery/touch-black/notebook-xps-15-9530-t-black-gallery-1.psd?fmt=pjpg&pscan=auto&scl=1&wid=3778&hei=2323&qlt=100,1&resMode=sharp2&size=3778,2323&chrss=full&imwidth=5000")
-                .price(169990.0)
-                .quantity(1)
-                .totalPrice(169990.0)
-                .build();
-
-        OrderItem sonySnapshot = OrderItem.builder()
-                .productId("seed-prod-sony-wh1000xm5")
-                .productName("Sony WH-1000XM5 Wireless Headphones")
-                .productImage("https://www.sony.co.in/image/94101fcc4f07476f823d060b0a188f23?fmt=png-alpha&wid=1200")
-                .price(29990.0)
-                .quantity(2)
-                .totalPrice(59980.0)
-                .build();
-
-        Order order4 = Order.builder()
-                .userId("seed-user-aditya")
-                .items(List.of(dellSnapshot, sonySnapshot))
-                .quantity(3)
-                .totalPrice(229970.0)
-                .status("CONFIRMED")
-                .address(kolkata)
-                .createdAt(LocalDateTime.now().minusDays(2))
-                .build();
-
-        orderRepository.saveAll(List.of(order1, order2, order3, order4));
-        System.out.println("Seeded 4 orders with full product snapshots.");
     }
 }
