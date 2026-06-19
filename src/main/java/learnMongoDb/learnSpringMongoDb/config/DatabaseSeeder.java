@@ -67,10 +67,12 @@ public class DatabaseSeeder implements CommandLineRunner {
                 .filter(p -> p.getName() != null && p.getName().contains("Levi"))
                 .findFirst().orElse(null);
 
-        // Address entity has: line1, city, state, zipCode, country
-        // (no `name` or `phone` fields — removed to match the entity)
+        // Address entity now matches the frontend normalizeToStore() payload
         Address kolkataAddress = Address.builder()
-                .line1("704, Tagore Nagar, Kolkata - 07")
+                .fullName("Aditya Singh")
+                .phoneNumber("9748017617")
+                .addressLine1("704, Tagore Nagar, Kolkata")
+                .addressLine2("Swiss Apt")
                 .city("Kolkata")
                 .state("West Bengal")
                 .zipCode("700007")
