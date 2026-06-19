@@ -1,6 +1,10 @@
 package learnMongoDb.learnSpringMongoDb.config;
 
+import learnMongoDb.learnSpringMongoDb.entity.Address;
+import learnMongoDb.learnSpringMongoDb.entity.Order;
+import learnMongoDb.learnSpringMongoDb.entity.OrderItem;
 import learnMongoDb.learnSpringMongoDb.entity.Product;
+import learnMongoDb.learnSpringMongoDb.repository.OrderRepository;
 import learnMongoDb.learnSpringMongoDb.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
@@ -13,16 +17,159 @@ import java.util.List;
 public class DatabaseSeeder implements CommandLineRunner {
 
     private final ProductRepository productRepository;
+    private final OrderRepository   orderRepository;
+
+    // Hardcoded demo user ID — matches whoever you test with.
+    // In production this seeder is skipped (products.count() > 0 guard).
+    private static final String DEMO_USER_ID = "6a32e29fe6978482d579a6bc";
 
     @Override
     public void run(String... args) {
 
         System.out.println("DATABASE SEEDER EXECUTED");
 
+        // ── Products ────────────────────────────────────────────────────────
         if (productRepository.count() > 0) {
-            System.out.println("Products already exist. Skipping seed.");
-            return;
+            System.out.println("Products already exist. Skipping product seed.");
+        } else {
+            seedProducts();
         }
+
+        // ── Sample orders ────────────────────────────────────────────────────
+        // Seed a small set of demo orders so the Orders page is never empty.
+        // Guard: skip if any orders already exist for the demo user.
+        if (orderRepository.existsByUserId(DEMO_USER_ID)) {
+            System.out.println("Orders already exist for demo user. Skipping order seed.");
+        } else {
+            seedOrders();
+        }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    //  Order seeding
+    // ────────────────────────────────────────────────────────────────────────
+
+    private void seedOrders() {
+        // Pick three well-known products by name so the images/prices are real.
+        // We look them up from the products collection that was just seeded.
+        Product iphone = productRepository
+                .findAll().stream()
+                .filter(p -> p.getName() != null && p.getName().contains("iPhone"))
+                .findFirst().orElse(null);
+
+        Product sony = productRepository
+                .findAll().stream()
+                .filter(p -> p.getName() != null && p.getName().contains("Sony WH-1000XM5"))
+                .findFirst().orElse(null);
+
+        Product levis = productRepository
+                .findAll().stream()
+                .filter(p -> p.getName() != null && p.getName().contains("Levi"))
+                .findFirst().orElse(null);
+
+        Address kolkataAddress = Address.builder()
+                .name("Aditya Singh")
+                .phone("9876543210")
+                .line1("704, Tagore Nagar, Kolkata - 07")
+                .city("Kolkata")
+                .state("West Bengal")
+                .zipCode("700007")
+                .country("India")
+                .build();
+
+        // Order 1 — DELIVERED (iPhone 17 Pro Max)
+        if (iphone != null) {
+            double unitPrice = iphone.getPrice();
+            OrderItem snap = OrderItem.builder()
+                    .productId(iphone.getId())
+                    .productName(iphone.getName())
+                    .productImage(iphone.getImageUrl())
+                    .price(unitPrice)
+                    .quantity(1)
+                    .totalPrice(unitPrice)
+                    .build();
+
+            orderRepository.save(Order.builder()
+                    .userId(DEMO_USER_ID)
+                    .items(List.of(snap))
+                    .quantity(1)
+                    .totalPrice(unitPrice)
+                    .status("DELIVERED")
+                    .address(kolkataAddress)
+                    .build());
+
+            System.out.println("Seeded DELIVERED order — " + iphone.getName());
+        }
+
+        // Order 2 — PENDING (Sony WH-1000XM5 + Levi's jeans)
+        if (sony != null && levis != null) {
+            double sonyPrice  = sony.getPrice();
+            double levisPrice = levis.getPrice();
+
+            OrderItem sonySnap = OrderItem.builder()
+                    .productId(sony.getId())
+                    .productName(sony.getName())
+                    .productImage(sony.getImageUrl())
+                    .price(sonyPrice)
+                    .quantity(1)
+                    .totalPrice(sonyPrice)
+                    .build();
+
+            OrderItem levisSnap = OrderItem.builder()
+                    .productId(levis.getId())
+                    .productName(levis.getName())
+                    .productImage(levis.getImageUrl())
+                    .price(levisPrice)
+                    .quantity(2)
+                    .totalPrice(levisPrice * 2)
+                    .build();
+
+            double total = sonyPrice + levisPrice * 2;
+
+            orderRepository.save(Order.builder()
+                    .userId(DEMO_USER_ID)
+                    .items(List.of(sonySnap, levisSnap))
+                    .quantity(3)
+                    .totalPrice(total)
+                    .status("PENDING")
+                    .address(kolkataAddress)
+                    .build());
+
+            System.out.println("Seeded PENDING order — Sony + Levi's");
+        }
+
+        // Order 3 — CANCELLED (Levi's jeans)
+        if (levis != null) {
+            double unitPrice = levis.getPrice();
+            OrderItem snap = OrderItem.builder()
+                    .productId(levis.getId())
+                    .productName(levis.getName())
+                    .productImage(levis.getImageUrl())
+                    .price(unitPrice)
+                    .quantity(1)
+                    .totalPrice(unitPrice)
+                    .build();
+
+            orderRepository.save(Order.builder()
+                    .userId(DEMO_USER_ID)
+                    .items(List.of(snap))
+                    .quantity(1)
+                    .totalPrice(unitPrice)
+                    .status("CANCELLED")
+                    .address(kolkataAddress)
+                    .build());
+
+            System.out.println("Seeded CANCELLED order — " + levis.getName());
+        }
+
+        System.out.println("Sample orders seeded successfully!");
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    //  Product seeding (original, unchanged)
+    // ────────────────────────────────────────────────────────────────────────
+
+    private void seedProducts() {
 
         List<Product> products = List.of(
 
@@ -126,7 +273,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .imageUrl("https://rukminim2.flixcart.com/image/1536/1536/xif0q/television/p/g/5/-original-imahggetxjeguqga.jpeg?q=90")
                         .build(),
 
-                // ── ELECTRONICS – Camera ──────────────────────────────────
+                // ── ELECTRONICS – Camera ──────────────────────────────────────
                 Product.builder()
                         .name("Canon EOS R50 RF-S18-45mm STM Mirrorless Camera (Black)- 24.2 MP")
                         .category("Electronics").subcategory("Camera").brand("Canon")
@@ -139,7 +286,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .name("SONY Alpha ILCE-6600M APS-C Mirrorless Camera with 18-135 mm Zoom Lens (Black)- 24.2 MP")
                         .category("Electronics").subcategory("Camera").brand("SONY")
                         .price(89000.0).stock(31)
-                        .description("Canon EOS R50 RF-S18-45mm f/4.5-6.3 is STM Mirrorless Camera (Black)- 4K Video Vlogging with 24.2 MP. Shoot what you like with the α6600 from Sony. This camera features the Optical Stabilisation feature to provide you with shake-free images, AI-based Subject Tracking to help you track the face and eyes of the subject, High-capacity Z Battery to make sure that you can shoot for long hours without any hassle.")
+                        .description("Shoot what you like with the \u03b16600 from Sony. This camera features the Optical Stabilisation feature to provide you with shake-free images, AI-based Subject Tracking to help you track the face and eyes of the subject, High-capacity Z Battery to make sure that you can shoot for long hours without any hassle.")
                         .imageUrl("https://rukminim2.flixcart.com/image/1536/1536/k3q76a80/camera/k/7/9/sony-apsc-ilce-6600m-b-in5-mirrorless-original-imafm6nvxhybpwhs.jpeg?q=90")
                         .build(),
 
@@ -206,7 +353,7 @@ public class DatabaseSeeder implements CommandLineRunner {
                         .name("Air Jordan 1 Mid SE")
                         .category("Clothing").subcategory("Shoes").brand("Adidas")
                         .price(12295.0).stock(47)
-                        .description("Inspired by the original AJ1, this mid-top edition maintains the iconic look you love while choice colours and crisp leather give it a distinct identity..")
+                        .description("Inspired by the original AJ1, this mid-top edition maintains the iconic look you love while choice colours and crisp leather give it a distinct identity.")
                         .imageUrl("https://adn-static1.nykaa.com/nykdesignstudio-images/pub/media/catalog/product/c/e/ce80759Nike-II3789-001_1.jpg?rnd=20200526195200&tr=w-1080")
                         .build(),
 

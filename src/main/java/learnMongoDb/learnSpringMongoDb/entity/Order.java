@@ -10,6 +10,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -31,6 +32,14 @@ import java.util.List;
  *     exactly what the customer purchased at the time they bought it.
  *   - Eliminates N+1 query problem: no secondary lookups needed to
  *     render the Orders page or Order Detail page.
+ *
+ * Backward-compat note:
+ * ---------------------
+ * Orders created before the snapshot migration stored products under
+ * the field name "products" in MongoDB. The @Field("products") alias
+ * on the `legacyProducts` field reads those old documents without any
+ * data migration. mapToResponse() in OrderController prefers `items`
+ * and falls back to `legacyProducts` so both old and new documents work.
  */
 @Data
 @Builder
@@ -71,9 +80,22 @@ public class Order {
     private Address address;
 
     /**
-     * Embedded product snapshots — one entry per distinct product in the order.
-     * Replaces the old @DBRef List<Product> approach.
+     * Embedded product snapshots — one entry per distinct product.
+     * New orders (post-migration) store snapshots here under MongoDB field "items".
      */
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
+
+    /**
+     * BACKWARD-COMPAT: legacy documents created before the snapshot migration
+     * stored products under the MongoDB field name "products".
+     *
+     * Spring Data reads the "products" array from MongoDB into this field.
+     * OrderController.mapToResponse() checks items first, then falls back here.
+     *
+     * Do NOT write to this field — new orders always use `items`.
+     */
+    @Field("products")
+    @Builder.Default
+    private List<OrderItem> legacyProducts = new ArrayList<>();
 }

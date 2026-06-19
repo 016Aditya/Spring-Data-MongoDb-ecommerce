@@ -18,6 +18,11 @@ import java.util.stream.Collectors;
  * All write paths delegate snapshot-building to OrderService.
  * mapToResponse() always populates the items list so the frontend
  * never receives an order without product details.
+ *
+ * Backward-compat: legacy orders stored products under the "products"
+ * MongoDB field. mapToResponse() falls back to order.getLegacyProducts()
+ * when order.getItems() is empty so old documents render correctly
+ * without any data migration.
  */
 @RestController
 @RequestMapping("/api/orders")
@@ -116,7 +121,6 @@ public class OrderController {
             @PathVariable String id,
             @RequestBody OrderDto.UpdateStatusRequest request) {
 
-        // Allow admin to move to RETURNED or any return-related status
         Order updated = orderService.updateOrderStatus(id, request.getStatus());
         return ResponseEntity.ok(mapToResponse(updated));
     }
@@ -127,7 +131,6 @@ public class OrderController {
     public ResponseEntity<OrderDto.Response> cancelReturn(
             @PathVariable String id) {
 
-        // Revert to DELIVERED if return is cancelled
         Order order = orderService.getOrderById(id);
         if (!"RETURN_REQUESTED".equals(order.getStatus())) {
             return ResponseEntity.badRequest().build();
@@ -177,9 +180,13 @@ public class OrderController {
     /**
      * Translates an Order entity into a safe JSON Response DTO.
      *
-     * items is always populated — even for legacy orders that were seeded
-     * before the snapshot migration (those will have an empty list which
-     * the frontend's normalizeOrder() handles gracefully).
+     * Item resolution priority:
+     *   1. order.getItems()          — new orders (post-migration, stored as "items" in MongoDB)
+     *   2. order.getLegacyProducts() — old orders (pre-migration, stored as "products" in MongoDB)
+     *   3. empty list                — truly empty orders (graceful fallback)
+     *
+     * This means zero data migration is needed — old documents render
+     * correctly without touching MongoDB.
      */
     private OrderDto.Response mapToResponse(Order order) {
         OrderDto.Response response = new OrderDto.Response();
@@ -191,12 +198,16 @@ public class OrderController {
         response.setAddress(order.getAddress());
         response.setCreatedAt(order.getCreatedAt());
 
-        // Map each embedded OrderItem snapshot to the response DTO.
-        // Never returns null — always at least an empty list.
-        List<OrderItem> items =
-                order.getItems() != null ? order.getItems() : Collections.emptyList();
+        // Prefer new `items` field; fall back to legacy `products` field for old documents.
+        List<OrderItem> rawItems = order.getItems();
+        if (rawItems == null || rawItems.isEmpty()) {
+            rawItems = order.getLegacyProducts();
+        }
+        if (rawItems == null) {
+            rawItems = Collections.emptyList();
+        }
 
-        List<OrderDto.OrderItemResponse> itemResponses = items.stream()
+        List<OrderDto.OrderItemResponse> itemResponses = rawItems.stream()
                 .map(item -> {
                     OrderDto.OrderItemResponse ir = new OrderDto.OrderItemResponse();
                     ir.setProductId(item.getProductId());
