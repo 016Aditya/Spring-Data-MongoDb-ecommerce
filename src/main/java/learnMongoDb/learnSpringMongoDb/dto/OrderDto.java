@@ -31,6 +31,17 @@ public class OrderDto {
         private Address address;
     }
 
+    // ── Return request ────────────────────────────────────────────────────────
+
+    @Data
+    public static class ReturnRequest {
+        /** Reason the customer is returning the order. */
+        private String reason;
+
+        /** ISO-8601 timestamp sent from the frontend. */
+        private String requestedAt;
+    }
+
     // ── Outbound ─────────────────────────────────────────────────────────────
 
     /**
@@ -84,7 +95,16 @@ public class OrderDto {
 
     @Data
     public static class UpdateStatusRequest {
-        /** Target status, e.g. "SHIPPED", "DELIVERED", "CANCELLED". */
+        /** Target status, e.g. "SHIPPED", "DELIVERED", "CANCELLED", "RETURN_REQUESTED", "RETURNED". */
         private String status;
+    }
+
+    // ── Return status response ────────────────────────────────────────────────
+
+    @Data
+    public static class ReturnStatusResponse {
+        private String orderId;
+        private String status;
+        private String message;
     }
 }

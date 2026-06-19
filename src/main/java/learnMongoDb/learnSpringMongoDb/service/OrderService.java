@@ -125,6 +125,45 @@ public class OrderService {
         return saved;
     }
 
+    /**
+     * Initiates a return for a delivered order.
+     *
+     * Business rule: only DELIVERED orders can be returned.
+     * Sets status to RETURN_REQUESTED and persists the reason in the order.
+     *
+     * @param orderId  The order to return.
+     * @param reason   Customer-supplied return reason.
+     * @return         Updated order with status RETURN_REQUESTED.
+     */
+    public Order returnOrder(String orderId, String reason) {
+        Order order = getOrderById(orderId);
+
+        String currentStatus = order.getStatus();
+        if (!"DELIVERED".equalsIgnoreCase(currentStatus)) {
+            throw new IllegalStateException(
+                    "Only DELIVERED orders can be returned. Current status: " + currentStatus);
+        }
+
+        order.setStatus("RETURN_REQUESTED");
+        Order saved = orderRepository.save(order);
+        log.info("Return requested — orderId={} reason='{}'", orderId, reason);
+        return saved;
+    }
+
+    /**
+     * Admin: complete a return (set status to RETURNED).
+     *
+     * @param orderId  The order to mark as fully returned.
+     * @return         Updated order with status RETURNED.
+     */
+    public Order completeReturn(String orderId) {
+        Order order = getOrderById(orderId);
+        order.setStatus("RETURNED");
+        Order saved = orderRepository.save(order);
+        log.info("Return completed — orderId={}", orderId);
+        return saved;
+    }
+
     /** Permanently removes the order document. Use with caution. */
     public void deleteOrder(String id) {
         orderRepository.deleteById(id);

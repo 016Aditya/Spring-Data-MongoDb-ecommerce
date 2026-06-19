@@ -73,6 +73,69 @@ public class OrderController {
         return ResponseEntity.ok(mapToResponse(updated));
     }
 
+    // ── POST /api/orders/{id}/return — customer initiates return ─────────────
+
+    @PostMapping("/{id}/return")
+    public ResponseEntity<OrderDto.Response> initiateReturn(
+            @PathVariable String id,
+            @RequestBody(required = false) OrderDto.ReturnRequest request) {
+
+        String reason = (request != null && request.getReason() != null)
+                ? request.getReason()
+                : "";
+
+        Order updated = orderService.returnOrder(id, reason);
+        return ResponseEntity.ok(mapToResponse(updated));
+    }
+
+    // ── GET /api/orders/{id}/return — fetch return status ────────────────────
+
+    @GetMapping("/{id}/return")
+    public ResponseEntity<OrderDto.ReturnStatusResponse> getReturnStatus(
+            @PathVariable String id) {
+
+        Order order = orderService.getOrderById(id);
+        String status = order.getStatus();
+
+        OrderDto.ReturnStatusResponse response = new OrderDto.ReturnStatusResponse();
+        response.setOrderId(id);
+        response.setStatus(status);
+
+        boolean isReturnStatus = "RETURN_REQUESTED".equals(status) || "RETURNED".equals(status);
+        response.setMessage(isReturnStatus
+                ? "Return status: " + status
+                : "No return initiated for this order");
+
+        return ResponseEntity.ok(response);
+    }
+
+    // ── PATCH /api/orders/{id}/return — admin updates return status ───────────
+
+    @PatchMapping("/{id}/return")
+    public ResponseEntity<OrderDto.Response> updateReturnStatus(
+            @PathVariable String id,
+            @RequestBody OrderDto.UpdateStatusRequest request) {
+
+        // Allow admin to move to RETURNED or any return-related status
+        Order updated = orderService.updateOrderStatus(id, request.getStatus());
+        return ResponseEntity.ok(mapToResponse(updated));
+    }
+
+    // ── DELETE /api/orders/{id}/return — cancel a return request ─────────────
+
+    @DeleteMapping("/{id}/return")
+    public ResponseEntity<OrderDto.Response> cancelReturn(
+            @PathVariable String id) {
+
+        // Revert to DELIVERED if return is cancelled
+        Order order = orderService.getOrderById(id);
+        if (!"RETURN_REQUESTED".equals(order.getStatus())) {
+            return ResponseEntity.badRequest().build();
+        }
+        Order updated = orderService.updateOrderStatus(id, "DELIVERED");
+        return ResponseEntity.ok(mapToResponse(updated));
+    }
+
     // ── GET /api/orders/city/{city} ──────────────────────────────────────────
 
     @GetMapping("/city/{city}")
