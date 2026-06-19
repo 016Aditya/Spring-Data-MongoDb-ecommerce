@@ -181,12 +181,13 @@ public class OrderController {
      * Translates an Order entity into a safe JSON Response DTO.
      *
      * Item resolution priority:
-     *   1. order.getItems()          — new orders (post-migration, stored as "items" in MongoDB)
-     *   2. order.getLegacyProducts() — old orders (pre-migration, stored as "products" in MongoDB)
+     *   1. order.getItems()          — new orders (stored as "items" in MongoDB)
+     *   2. order.getLegacyProducts() — old orders (stored as "products" in MongoDB)
      *   3. empty list                — truly empty orders (graceful fallback)
      *
-     * This means zero data migration is needed — old documents render
-     * correctly without touching MongoDB.
+     * imageUrl and productImage are both set to the same absolute URL so the
+     * React frontend's normalizeOrderItem() resolves the image on its first
+     * priority check (item.imageUrl) without needing to fall through.
      */
     private OrderDto.Response mapToResponse(Order order) {
         OrderDto.Response response = new OrderDto.Response();
@@ -212,7 +213,14 @@ public class OrderController {
                     OrderDto.OrderItemResponse ir = new OrderDto.OrderItemResponse();
                     ir.setProductId(item.getProductId());
                     ir.setProductName(item.getProductName());
-                    ir.setProductImage(item.getProductImage());
+
+                    // Set BOTH fields to the same URL:
+                    //   imageUrl      — first priority in normalizeOrderItem()
+                    //   productImage  — fallback / backward compat
+                    String imageUrl = item.getProductImage();
+                    ir.setImageUrl(imageUrl);
+                    ir.setProductImage(imageUrl);
+
                     ir.setPrice(item.getPrice());
                     ir.setQuantity(item.getQuantity());
                     ir.setTotalPrice(item.getTotalPrice());

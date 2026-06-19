@@ -46,7 +46,11 @@ public class OrderDto {
 
     /**
      * Single order-item row returned inside every Order response.
-     * Fields mirror what the React frontend's normalizeOrderItem() expects.
+     *
+     * Both imageUrl and productImage are set to the same value.
+     * The React frontend's normalizeOrderItem() checks imageUrl FIRST,
+     * then productImage as fallback — so having both guarantees the image
+     * is always resolved regardless of which field the normalizer hits.
      */
     @Data
     public static class OrderItemResponse {
@@ -56,7 +60,16 @@ public class OrderDto {
         /** Name snapshot — as it was when the order was placed. */
         private String productName;
 
-        /** Image URL snapshot. */
+        /**
+         * Image URL — primary field checked by the frontend normalizer.
+         * Always set to the absolute product image URL.
+         */
+        private String imageUrl;
+
+        /**
+         * Image URL — legacy / alias field for backward compatibility.
+         * Set to the same value as imageUrl.
+         */
         private String productImage;
 
         /** Unit price at purchase time. */
@@ -86,7 +99,7 @@ public class OrderDto {
 
         /**
          * Product snapshot list — always populated.
-         * The frontend reads items[0].productName, items[0].productImage, etc.
+         * The frontend reads items[0].productName, items[0].imageUrl, etc.
          */
         private List<OrderItemResponse> items;
     }
