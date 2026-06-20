@@ -20,7 +20,7 @@ import java.util.Map;
  * POST   /api/users/register          - Create account
  * POST   /api/users/login             - Authenticate
  * GET    /api/users/{id}              - Get profile by ID
- * PUT    /api/users/{id}              - Update profile
+ * PUT    /api/users/{id}              - Update profile (firstName, lastName, phoneNumber, password)
  * DELETE /api/users/{id}             - Delete account
  *
  * Forgot Password (no tokens / SMS)
@@ -86,6 +86,7 @@ public class UserController {
                 id,
                 request.getFirstName(),
                 request.getLastName(),
+                request.getPhoneNumber(),
                 request.getPassword());
 
         return ResponseEntity.ok(mapToResponse(updatedUser));
@@ -153,6 +154,7 @@ public class UserController {
         response.setFirstName(user.getFirstName());
         response.setLastName(user.getLastName());
         response.setEmail(user.getEmail());
+        response.setPhoneNumber(user.getPhoneNumber());
         response.setRole(user.getRole());
         response.setCreatedAt(user.getCreatedAt());
         return response;
@@ -160,11 +162,6 @@ public class UserController {
 
     // Inline Login DTO -------------------------------------------------------
 
-    /**
-     * Root cause fix: added @Valid on the handler parameter AND @NotBlank
-     * on both fields. Without @Valid the constraints are never evaluated
-     * and null values silently reach UserService.loginUser(), causing NPE.
-     */
     @Data
     public static class LoginRequest {
 

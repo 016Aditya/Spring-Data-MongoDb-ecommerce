@@ -30,7 +30,7 @@ public class UserDto {
         private String password;
 
         /**
-         * 10-digit phone number.  Stored for password-recovery identity
+         * 10-digit phone number. Stored for password-recovery identity
          * verification only – no SMS / OTP is sent.
          */
         @NotBlank(message = "Phone number is required")
@@ -38,7 +38,9 @@ public class UserDto {
         private String phoneNumber;
     }
 
-    // ─── Response (never includes passwordHash / phoneNumber) ────────────────
+    // ─── Response ────────────────────────────────────────────────────────────
+    // phoneNumber is included so the frontend can pre-fill the profile form.
+    // passwordHash is NEVER included.
 
     @Data
     public static class Response {
@@ -46,9 +48,9 @@ public class UserDto {
         private String firstName;
         private String lastName;
         private String email;
+        private String phoneNumber;
         private String role;
         private LocalDateTime createdAt;
-        // phoneNumber intentionally omitted from all responses
     }
 
     // ─── Profile update ──────────────────────────────────────────────────────
@@ -61,6 +63,13 @@ public class UserDto {
 
         @NotBlank(message = "Last name is required")
         private String lastName;
+
+        /**
+         * 10-digit phone number – optional, but if provided must be valid.
+         * Leave null/blank to keep the existing value.
+         */
+        @Pattern(regexp = "^([0-9]{10})?$", message = "Phone number must be exactly 10 digits")
+        private String phoneNumber;
 
         /** Optional: leave blank to keep existing password. */
         @Size(min = 8, message = "Password must be at least 8 characters")

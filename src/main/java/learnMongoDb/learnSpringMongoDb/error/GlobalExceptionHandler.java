@@ -13,26 +13,29 @@ import java.util.Map;
 /**
  * GlobalExceptionHandler
  *
- * Root cause fix:
- * MethodArgumentNotValidException (Bean Validation failures triggered by @Valid)
- * was not handled. Spring Boot's default behaviour returned a 500 HTML
- * Whitelabel Error page. The frontend api.js interceptor reads
- * error.response.data.message || error.response.data.error — neither key
- * exists in an HTML body, so every validation failure showed as
- * "Something went wrong" with no field-level detail.
- *
- * Fix: handle MethodArgumentNotValidException explicitly, collect all
- * field errors into a JSON map, and return 422 Unprocessable Entity.
- * The top-level "error" key mirrors the existing RuntimeException handler
- * so the frontend interceptor works without changes.
+ * Exception mapping
+ * ─────────────────
+ * UserNotFoundException      → 404 Not Found
+ * RuntimeException           → 400 Bad Request   (domain/business errors)
+ * MethodArgumentNotValidException → 422 Unprocessable Entity  (Bean Validation)
  */
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
     /**
-     * Domain / business logic errors (RuntimeException).
+     * Resource-not-found errors (404).
+     * Example: "User not found with ID: xyz"
+     */
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleUserNotFound(UserNotFoundException ex) {
+        Map<String, String> body = new HashMap<>();
+        body.put("error", ex.getMessage());
+        return new ResponseEntity<>(body, HttpStatus.NOT_FOUND);
+    }
+
+    /**
+     * Domain / business logic errors (400).
      * Examples: "No account found", "Incorrect password", "Email already in use".
-     * Returns 400 Bad Request with { "error": "message" }.
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntimeException(RuntimeException ex) {
@@ -42,12 +45,9 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Bean Validation failures (@Valid on @RequestBody).
-     * Examples: "Password must be at least 8 characters", "Phone number must be 10 digits".
-     *
-     * Returns 422 Unprocessable Entity with:
+     * Bean Validation failures (@Valid on @RequestBody) → 422.
      *   {
-     *     "error":  "<first field message>",   <- read by frontend api.js interceptor
+     *     "error":  "<first field message>",
      *     "errors": { "fieldName": "message", ... }
      *   }
      */
