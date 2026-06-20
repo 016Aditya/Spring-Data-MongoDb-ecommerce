@@ -2,119 +2,100 @@ package learnMongoDb.learnSpringMongoDb.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
+/**
+ * UserDto
+ *
+ * Data Transfer Objects for User API requests and responses.
+ *
+ * LoginResponse now includes a JWT token so the frontend can
+ * store and send it on subsequent requests.
+ */
 public class UserDto {
 
-    // ─── Registration ────────────────────────────────────────────────────────
+    // ── Request DTOs ─────────────────────────────────────────────────────────
 
     @Data
     public static class Request {
-
         @NotBlank(message = "First name is required")
         private String firstName;
 
         @NotBlank(message = "Last name is required")
         private String lastName;
 
-        @Email(message = "Invalid email address")
         @NotBlank(message = "Email is required")
+        @Email(message = "Email must be valid")
         private String email;
 
         @NotBlank(message = "Password is required")
-        @Size(min = 8, message = "Password must be at least 8 characters")
         private String password;
 
-        /**
-         * 10-digit phone number. Stored for password-recovery identity
-         * verification only – no SMS / OTP is sent.
-         */
-        @NotBlank(message = "Phone number is required")
-        @Pattern(regexp = "^[0-9]{10}$", message = "Phone number must be exactly 10 digits")
         private String phoneNumber;
     }
-
-    // ─── Response ────────────────────────────────────────────────────────────
-    // phoneNumber is included so the frontend can pre-fill the profile form.
-    // passwordHash is NEVER included.
-
-    @Data
-    public static class Response {
-        private String id;
-        private String firstName;
-        private String lastName;
-        private String email;
-        private String phoneNumber;
-        private String role;
-        private LocalDateTime createdAt;
-    }
-
-    // ─── Profile update ──────────────────────────────────────────────────────
 
     @Data
     public static class UpdateProfileRequest {
-
         @NotBlank(message = "First name is required")
         private String firstName;
 
         @NotBlank(message = "Last name is required")
         private String lastName;
 
-        /**
-         * 10-digit phone number – optional, but if provided must be valid.
-         * Leave null/blank to keep the existing value.
-         */
-        @Pattern(regexp = "^([0-9]{10})?$", message = "Phone number must be exactly 10 digits")
         private String phoneNumber;
-
-        /** Optional: leave blank to keep existing password. */
-        @Size(min = 8, message = "Password must be at least 8 characters")
         private String password;
     }
 
-    // ─── Forgot Password – Step 1: submit email ──────────────────────────────
-
     @Data
     public static class ForgotPasswordRequest {
-
-        @Email(message = "Invalid email address")
         @NotBlank(message = "Email is required")
+        @Email(message = "Email must be valid")
         private String email;
     }
-
-    // ─── Forgot Password – Step 2: verify identity (email + phone) ───────────
 
     @Data
     public static class VerifyIdentityRequest {
-
-        @Email(message = "Invalid email address")
         @NotBlank(message = "Email is required")
+        @Email(message = "Email must be valid")
         private String email;
 
         @NotBlank(message = "Phone number is required")
-        @Pattern(regexp = "^[0-9]{10}$", message = "Phone number must be exactly 10 digits")
         private String phoneNumber;
     }
 
-    // ─── Forgot Password – Step 3: set new password ──────────────────────────
-
     @Data
     public static class ResetPasswordRequest {
+        @NotBlank private String email;
+        @NotBlank private String phoneNumber;
+        @NotBlank private String newPassword;
+    }
 
-        @Email(message = "Invalid email address")
-        @NotBlank(message = "Email is required")
-        private String email;
+    // ── Response DTOs ────────────────────────────────────────────────────────
 
-        @NotBlank(message = "Phone number is required")
-        @Pattern(regexp = "^[0-9]{10}$", message = "Phone number must be exactly 10 digits")
-        private String phoneNumber;
+    @Data
+    public static class Response {
+        private String  id;
+        private String  firstName;
+        private String  lastName;
+        private String  email;
+        private String  phoneNumber;
+        private String  role;
+        private Instant createdAt;
+    }
 
-        @NotBlank(message = "New password is required")
-        @Size(min = 8, message = "New password must be at least 8 characters")
-        private String newPassword;
+    /**
+     * LoginResponse
+     *
+     * Returned by POST /api/users/login.
+     * Contains the signed JWT plus the user profile.
+     * The frontend must store the token and include it in every subsequent
+     * request as:  Authorization: Bearer <token>
+     */
+    @Data
+    public static class LoginResponse {
+        private String   token;  // signed JWT
+        private Response user;   // user profile (for UI state — never trust client-side for auth)
     }
 }

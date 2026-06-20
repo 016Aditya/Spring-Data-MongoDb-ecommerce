@@ -4,10 +4,13 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import learnMongoDb.learnSpringMongoDb.dto.UserDto;
 import learnMongoDb.learnSpringMongoDb.entity.User;
+import learnMongoDb.learnSpringMongoDb.security.CustomUserDetails;
+import learnMongoDb.learnSpringMongoDb.security.JwtUtil;
 import learnMongoDb.learnSpringMongoDb.service.UserService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -18,15 +21,20 @@ import java.util.Map;
  * Endpoints
  * ----------
  * POST   /api/users/register          - Create account
- * POST   /api/users/login             - Authenticate
- * GET    /api/users/{id}              - Get profile by ID
- * PUT    /api/users/{id}              - Update profile (firstName, lastName, phoneNumber, password)
- * DELETE /api/users/{id}             - Delete account
+ * POST   /api/users/login             - Authenticate → returns JWT
+ * GET    /api/users/{id}              - Get profile (own profile only)
+ * PUT    /api/users/{id}              - Update profile (own profile only)
+ * DELETE /api/users/{id}             - Delete account (own profile only)
  *
  * Forgot Password (no tokens / SMS)
  * POST   /api/users/forgot-password  - Step 1: check email exists
  * POST   /api/users/verify-identity  - Step 2: email + phone must match
  * POST   /api/users/reset-password   - Step 3: set new password
+ *
+ * Security changes:
+ * - login() now issues a signed JWT containing userId (sub), email, role.
+ * - Protected endpoints extract userId from the JWT principal, not the URL path,
+ *   and reject requests where the path userId doesn't match the authenticated userId.
  */
 @RestController
 @RequestMapping("/api/users")
@@ -34,6 +42,7 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final JwtUtil    jwtUtil;
 
     // Register ---------------------------------------------------------------
 
@@ -53,34 +62,57 @@ public class UserController {
         return ResponseEntity.ok(mapToResponse(savedUser));
     }
 
-    // Login ------------------------------------------------------------------
+    // Login — issues JWT -----------------------------------------------------
 
     @PostMapping("/login")
-    public ResponseEntity<UserDto.Response> loginUser(
+    public ResponseEntity<UserDto.LoginResponse> loginUser(
             @Valid @RequestBody LoginRequest loginRequest) {
 
         User loggedInUser = userService.loginUser(
                 loginRequest.getEmail(),
                 loginRequest.getPassword());
 
-        return ResponseEntity.ok(mapToResponse(loggedInUser));
+        // Generate a signed JWT with userId in the "sub" claim.
+        // The frontend stores this token and sends it as Authorization: Bearer <token>.
+        String token = jwtUtil.generateToken(
+                loggedInUser.getId(),
+                loggedInUser.getEmail(),
+                loggedInUser.getRole());
+
+        UserDto.LoginResponse body = new UserDto.LoginResponse();
+        body.setToken(token);
+        body.setUser(mapToResponse(loggedInUser));
+
+        return ResponseEntity.ok(body);
     }
 
-    // Get by ID --------------------------------------------------------------
+    // Get by ID — own profile only -------------------------------------------
 
     @GetMapping("/{id}")
-    public ResponseEntity<UserDto.Response> getUserById(@PathVariable String id) {
+    public ResponseEntity<?> getUserById(
+            @PathVariable String id,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+
+        if (!principal.getUserId().equals(id)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
+        }
+
         return userService.getUserById(id)
                 .map(user -> ResponseEntity.ok(mapToResponse(user)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // Update profile ---------------------------------------------------------
+    // Update profile — own profile only --------------------------------------
 
     @PutMapping("/{id}")
-    public ResponseEntity<UserDto.Response> updateUserProfile(
+    public ResponseEntity<?> updateUserProfile(
             @PathVariable String id,
+            @AuthenticationPrincipal CustomUserDetails principal,
             @Valid @RequestBody UserDto.UpdateProfileRequest request) {
+
+        if (!principal.getUserId().equals(id)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
+        }
 
         User updatedUser = userService.updateUserProfile(
                 id,
@@ -92,10 +124,17 @@ public class UserController {
         return ResponseEntity.ok(mapToResponse(updatedUser));
     }
 
-    // Delete -----------------------------------------------------------------
+    // Delete — own profile only ----------------------------------------------
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable String id) {
+    public ResponseEntity<?> deleteUser(
+            @PathVariable String id,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+
+        if (!principal.getUserId().equals(id)) {
+            return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
+        }
+
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
