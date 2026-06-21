@@ -40,6 +40,12 @@ import java.util.List;
  * on the `legacyProducts` field reads those old documents without any
  * data migration. mapToResponse() in OrderController prefers `items`
  * and falls back to `legacyProducts` so both old and new documents work.
+ *
+ * Return fields (additive — nullable):
+ * -------------------------------------
+ * returnRequestedAt, returnCompletedAt, refundStatus are all nullable.
+ * Old MongoDB documents without these fields deserialize safely to null.
+ * No data migration required.
  */
 @Data
 @Builder
@@ -98,4 +104,26 @@ public class Order {
     @Field("products")
     @Builder.Default
     private List<OrderItem> legacyProducts = new ArrayList<>();
+
+    // ── Return fields (additive — all nullable) ──────────────────────────────
+
+    /**
+     * Timestamp when the customer requested the return.
+     * Null for orders that have never entered the return flow.
+     * Set by OrderService.returnOrder() when status → RETURN_REQUESTED.
+     */
+    private LocalDateTime returnRequestedAt;
+
+    /**
+     * Timestamp when the return was fully completed (status = RETURN_SUCCESSFUL).
+     * Null until the return lifecycle finishes.
+     */
+    private LocalDateTime returnCompletedAt;
+
+    /**
+     * Refund lifecycle state: "PENDING" | "PROCESSED" | null.
+     * Null for orders that have never been returned.
+     * Set to "PENDING" when return is initiated; "PROCESSED" when refund completes.
+     */
+    private String refundStatus;
 }
