@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -41,6 +42,12 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+            // Tell Spring Security to honour the CorsFilter bean defined in CorsConfig.
+            // Without this line Spring Security intercepts OPTIONS preflight requests
+            // before the CorsFilter runs, returning a 302 redirect instead of the
+            // required CORS headers — which is what caused the browser errors.
+            .cors(Customizer.withDefaults())
+
             .csrf(AbstractHttpConfigurer::disable)
 
             .sessionManagement(session ->
