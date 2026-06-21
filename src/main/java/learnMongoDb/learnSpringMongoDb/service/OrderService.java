@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -28,7 +29,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
 
-    // ── Order creation ───────────────────────────────────────────────────────
+    // ── Order creation ──────────────────────────────────────────────────
 
     /**
      * Creates an order from a list of product IDs.
@@ -58,11 +59,9 @@ public class OrderService {
                     .orElseThrow(() -> new RuntimeException(
                             "Product not found: " + productId));
 
-            // Default quantity = 1 per product ID in this request.
-            // To support qty > 1, extend Request DTO with a Map<String,Integer>.
-            int qty       = 1;
-            double unitPrice  = product.getPrice();
-            double lineTotal  = unitPrice * qty;
+            int qty          = 1;
+            double unitPrice = product.getPrice();
+            double lineTotal = unitPrice * qty;
 
             OrderItem snapshot = OrderItem.builder()
                     .productId(product.getId())
@@ -96,7 +95,7 @@ public class OrderService {
         return saved;
     }
 
-    // ── Queries ──────────────────────────────────────────────────────────────
+    // ── Queries ──────────────────────────────────────────────────────
 
     public List<Order> getOrdersByUserId(String userId) {
         return orderRepository.findByUserId(userId);
@@ -115,7 +114,7 @@ public class OrderService {
                 .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
     }
 
-    // ── Mutations ────────────────────────────────────────────────────────────
+    // ── Mutations ──────────────────────────────────────────────────
 
     public Order updateOrderStatus(String orderId, String newStatus) {
         Order order = getOrderById(orderId);
@@ -126,14 +125,18 @@ public class OrderService {
     }
 
     /**
-     * Initiates a return for a delivered order.
+     * Customer initiates a return for a delivered order.
      *
      * Business rule: only DELIVERED orders can be returned.
-     * Sets status to RETURN_REQUESTED and persists the reason in the order.
+     *
+     * Sets:
+     *   status            → RETURN_REQUESTED
+     *   returnRequestedAt → now()
+     *   refundStatus      → "PENDING"
      *
      * @param orderId  The order to return.
-     * @param reason   Customer-supplied return reason.
-     * @return         Updated order with status RETURN_REQUESTED.
+     * @param reason   Customer-supplied return reason (may be empty string).
+     * @return         Updated order with return fields populated.
      */
     public Order returnOrder(String orderId, String reason) {
         Order order = getOrderById(orderId);
@@ -145,20 +148,71 @@ public class OrderService {
         }
 
         order.setStatus("RETURN_REQUESTED");
+        order.setReturnRequestedAt(LocalDateTime.now());
+        order.setRefundStatus("PENDING");
+
         Order saved = orderRepository.save(order);
         log.info("Return requested — orderId={} reason='{}'", orderId, reason);
         return saved;
     }
 
+    // ── Admin / system return lifecycle methods ────────────────────────────
+
     /**
-     * Admin: complete a return (set status to RETURNED).
-     *
-     * @param orderId  The order to mark as fully returned.
-     * @return         Updated order with status RETURNED.
+     * Admin: approve the return request.
+     * Transitions: RETURN_REQUESTED → RETURN_APPROVED
+     */
+    public Order approveReturn(String orderId) {
+        return transitionReturnStatus(orderId, "RETURN_REQUESTED", "RETURN_APPROVED");
+    }
+
+    /**
+     * Admin: schedule pickup for the returned item.
+     * Transitions: RETURN_APPROVED → PICKUP_SCHEDULED
+     */
+    public Order schedulePickup(String orderId) {
+        return transitionReturnStatus(orderId, "RETURN_APPROVED", "PICKUP_SCHEDULED");
+    }
+
+    /**
+     * Admin: mark item as picked up from the customer.
+     * Transitions: PICKUP_SCHEDULED → PICKED_UP
+     */
+    public Order markPickedUp(String orderId) {
+        return transitionReturnStatus(orderId, "PICKUP_SCHEDULED", "PICKED_UP");
+    }
+
+    /**
+     * Admin: mark refund as processed.
+     * Transitions: PICKED_UP → REFUND_PROCESSED
+     * Also sets refundStatus = "PROCESSED".
+     */
+    public Order processRefund(String orderId) {
+        Order order = getOrderById(orderId);
+        if (!"PICKED_UP".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalStateException(
+                    "Expected PICKED_UP but found: " + order.getStatus());
+        }
+        order.setStatus("REFUND_PROCESSED");
+        order.setRefundStatus("PROCESSED");
+        Order saved = orderRepository.save(order);
+        log.info("Refund processed — orderId={}", orderId);
+        return saved;
+    }
+
+    /**
+     * Admin: complete the return lifecycle.
+     * Transitions: REFUND_PROCESSED → RETURN_SUCCESSFUL
+     * Also sets returnCompletedAt = now().
      */
     public Order completeReturn(String orderId) {
         Order order = getOrderById(orderId);
-        order.setStatus("RETURNED");
+        if (!"REFUND_PROCESSED".equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalStateException(
+                    "Expected REFUND_PROCESSED but found: " + order.getStatus());
+        }
+        order.setStatus("RETURN_SUCCESSFUL");
+        order.setReturnCompletedAt(LocalDateTime.now());
         Order saved = orderRepository.save(order);
         log.info("Return completed — orderId={}", orderId);
         return saved;
@@ -168,5 +222,19 @@ public class OrderService {
     public void deleteOrder(String id) {
         orderRepository.deleteById(id);
         log.warn("Order {} permanently deleted", id);
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────
+
+    private Order transitionReturnStatus(String orderId, String expectedCurrent, String next) {
+        Order order = getOrderById(orderId);
+        if (!expectedCurrent.equalsIgnoreCase(order.getStatus())) {
+            throw new IllegalStateException(
+                    "Expected " + expectedCurrent + " but found: " + order.getStatus());
+        }
+        order.setStatus(next);
+        Order saved = orderRepository.save(order);
+        log.info("Return status transition — orderId={} {} → {}", orderId, expectedCurrent, next);
+        return saved;
     }
 }
