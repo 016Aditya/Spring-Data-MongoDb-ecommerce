@@ -18,30 +18,22 @@ import java.util.stream.Collectors;
 /**
  * OrderController — REST API for orders.
  *
- * IDOR Fix (this commit)
- * ──────────────────────
+ * IDOR Fix:
+ * ──────────
  * The userId used to create or read orders is ALWAYS extracted from the
  * validated JWT via @AuthenticationPrincipal — never from the request body
  * or path variable supplied by the client.
  *
- * Before this fix, POST /api/orders accepted a userId in the request body.
- * An attacker could forge a different userId and place orders under another
- * user's account (IDOR — Insecure Direct Object Reference).
+ * Return endpoint fix:
+ * ───────────────────
+ * Customer return initiation is now PATCH /{id}/return (was @PostMapping — caused
+ * HTTP 405 when frontend sent PATCH, and conflicted with the admin PATCH handler).
  *
- * After this fix:
- *   createOrder     — userId from JWT, request body userId is ignored
- *   getOrdersByUser — path userId must equal JWT userId (403 otherwise)
- *   getOrderById    — order.userId must equal JWT userId (403 otherwise)
- *   initiateReturn  — order.userId must equal JWT userId (403 otherwise)
+ * Admin return status updates moved to PATCH /{id}/return/status to eliminate
+ * the mapping collision.
  *
- * Admin-only endpoints (updateOrderStatus, getOrdersByCity, getOrdersByStatusAndPrice,
- * deleteOrder) should be further restricted with @PreAuthorize("hasRole('ADMIN')")
- * once method-level security is enabled (@EnableMethodSecurity).
- *
- * Backward-compat: legacy orders stored products under the "products"
- * MongoDB field. mapToResponse() falls back to order.getLegacyProducts()
- * when order.getItems() is empty so old documents render correctly
- * without any data migration.
+ * mapToResponse() now maps returnRequestedAt, returnCompletedAt, refundStatus
+ * so the frontend receives these fields on every order response.
  */
 @RestController
 @RequestMapping("/api/orders")
@@ -50,44 +42,34 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    // ── POST /api/orders ─────────────────────────────────────────────────────
+    // ── POST /api/orders ─────────────────────────────────────────────────
 
     /**
      * Creates an order for the authenticated user.
-     *
-     * The userId is taken from the JWT principal — the userId field in the
-     * request body (if present) is completely ignored to prevent IDOR.
+     * userId is taken from the JWT — never from the request body (IDOR prevention).
      */
     @PostMapping
     public ResponseEntity<OrderDto.Response> createOrder(
             @RequestBody OrderDto.Request request,
             @AuthenticationPrincipal CustomUserDetails principal) {
 
-        // ✅ userId from JWT — never from request.getUserId()
         String userId = principal.getUserId();
 
         Order saved = orderService.createOrder(
                 request.getProductIds(),
-                userId,               // trusted source
+                userId,
                 request.getAddress());
 
         return ResponseEntity.ok(mapToResponse(saved));
     }
 
-    // ── GET /api/orders/user/{userId} ────────────────────────────────────────
+    // ── GET /api/orders/user/{userId} ───────────────────────────────────────
 
-    /**
-     * Lists orders for a user.
-     *
-     * The path variable is validated against the JWT userId.
-     * A user can only fetch their own orders — not another user's.
-     */
     @GetMapping("/user/{userId}")
     public ResponseEntity<?> getOrdersByUser(
             @PathVariable String userId,
             @AuthenticationPrincipal CustomUserDetails principal) {
 
-        // ✅ IDOR guard — reject if the path userId doesn't match the JWT userId
         if (!principal.getUserId().equals(userId)) {
             return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
         }
@@ -99,14 +81,8 @@ public class OrderController {
         return ResponseEntity.ok(responses);
     }
 
-    // ── GET /api/orders/{id} ─────────────────────────────────────────────────
+    // ── GET /api/orders/{id} ─────────────────────────────────────────────
 
-    /**
-     * Fetches a single order.
-     *
-     * Validates that the order belongs to the authenticated user.
-     * Returns 403 if the order's userId doesn't match the JWT userId.
-     */
     @GetMapping("/{id}")
     public ResponseEntity<?> getOrderById(
             @PathVariable String id,
@@ -114,7 +90,6 @@ public class OrderController {
 
         Order order = orderService.getOrderById(id);
 
-        // ✅ IDOR guard — reject if the order doesn't belong to this user
         if (!principal.getUserId().equals(order.getUserId())) {
             return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
         }
@@ -122,7 +97,7 @@ public class OrderController {
         return ResponseEntity.ok(mapToResponse(order));
     }
 
-    // ── PATCH /api/orders/{id}/status ────────────────────────────────────────
+    // ── PATCH /api/orders/{id}/status ───────────────────────────────────────
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<OrderDto.Response> updateOrderStatus(
@@ -133,9 +108,21 @@ public class OrderController {
         return ResponseEntity.ok(mapToResponse(updated));
     }
 
-    // ── POST /api/orders/{id}/return — customer initiates return ─────────────
+    // ── PATCH /api/orders/{id}/return — customer initiates return ────────────
 
-    @PostMapping("/{id}/return")
+    /**
+     * FIX: Changed from @PostMapping to @PatchMapping.
+     *
+     * The frontend returnService.js sends PATCH /api/orders/{id}/return.
+     * Previously this was @PostMapping which caused:
+     *   1. HTTP 405 Method Not Allowed (POST vs PATCH mismatch)
+     *   2. When PATCH did match, it hit the admin updateReturnStatus handler
+     *      which expected a {"status":"..."} body — not a return initiation.
+     *
+     * Now: PATCH /{id}/return  →  customer return initiation (this method)
+     *      PATCH /{id}/return/status  →  admin status update (see below)
+     */
+    @PatchMapping("/{id}/return")
     public ResponseEntity<?> initiateReturn(
             @PathVariable String id,
             @RequestBody(required = false) OrderDto.ReturnRequest request,
@@ -143,7 +130,7 @@ public class OrderController {
 
         Order order = orderService.getOrderById(id);
 
-        // ✅ IDOR guard — only the order owner can request a return
+        // IDOR guard — only the order owner can request a return
         if (!principal.getUserId().equals(order.getUserId())) {
             return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
         }
@@ -156,7 +143,7 @@ public class OrderController {
         return ResponseEntity.ok(mapToResponse(updated));
     }
 
-    // ── GET /api/orders/{id}/return — fetch return status ────────────────────
+    // ── GET /api/orders/{id}/return — fetch return status ──────────────────
 
     @GetMapping("/{id}/return")
     public ResponseEntity<?> getReturnStatus(
@@ -165,7 +152,6 @@ public class OrderController {
 
         Order order = orderService.getOrderById(id);
 
-        // ✅ IDOR guard
         if (!principal.getUserId().equals(order.getUserId())) {
             return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
         }
@@ -176,7 +162,7 @@ public class OrderController {
         response.setOrderId(id);
         response.setStatus(status);
 
-        boolean isReturnStatus = "RETURN_REQUESTED".equals(status) || "RETURNED".equals(status);
+        boolean isReturnStatus = status != null && status.startsWith("RETURN");
         response.setMessage(isReturnStatus
                 ? "Return status: " + status
                 : "No return initiated for this order");
@@ -184,9 +170,14 @@ public class OrderController {
         return ResponseEntity.ok(response);
     }
 
-    // ── PATCH /api/orders/{id}/return — admin updates return status ───────────
+    // ── PATCH /api/orders/{id}/return/status — admin updates return status ──
 
-    @PatchMapping("/{id}/return")
+    /**
+     * Admin endpoint to advance the return lifecycle.
+     * Moved from PATCH /{id}/return to PATCH /{id}/return/status
+     * to avoid collision with the customer-facing PATCH /{id}/return.
+     */
+    @PatchMapping("/{id}/return/status")
     public ResponseEntity<OrderDto.Response> updateReturnStatus(
             @PathVariable String id,
             @RequestBody OrderDto.UpdateStatusRequest request) {
@@ -195,7 +186,7 @@ public class OrderController {
         return ResponseEntity.ok(mapToResponse(updated));
     }
 
-    // ── DELETE /api/orders/{id}/return — cancel a return request ─────────────
+    // ── DELETE /api/orders/{id}/return — cancel a return request ───────────
 
     @DeleteMapping("/{id}/return")
     public ResponseEntity<?> cancelReturn(
@@ -204,7 +195,6 @@ public class OrderController {
 
         Order order = orderService.getOrderById(id);
 
-        // ✅ IDOR guard
         if (!principal.getUserId().equals(order.getUserId())) {
             return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
         }
@@ -216,7 +206,7 @@ public class OrderController {
         return ResponseEntity.ok(mapToResponse(updated));
     }
 
-    // ── GET /api/orders/city/{city} ──────────────────────────────────────────
+    // ── GET /api/orders/city/{city} ────────────────────────────────────────
 
     @GetMapping("/city/{city}")
     public ResponseEntity<List<OrderDto.Response>> getOrdersByCity(
@@ -229,7 +219,7 @@ public class OrderController {
         return ResponseEntity.ok(responses);
     }
 
-    // ── GET /api/orders/status ───────────────────────────────────────────────
+    // ── GET /api/orders/status ─────────────────────────────────────────────
 
     @GetMapping("/status")
     public ResponseEntity<List<OrderDto.Response>> getOrdersByStatusAndPrice(
@@ -244,7 +234,7 @@ public class OrderController {
         return ResponseEntity.ok(responses);
     }
 
-    // ── DELETE /api/orders/{id} ──────────────────────────────────────────────
+    // ── DELETE /api/orders/{id} ────────────────────────────────────────────
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteOrder(@PathVariable String id) {
@@ -252,7 +242,7 @@ public class OrderController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── Mapping helper ───────────────────────────────────────────────────────
+    // ── Mapping helper ────────────────────────────────────────────────
 
     private OrderDto.Response mapToResponse(Order order) {
         OrderDto.Response response = new OrderDto.Response();
@@ -264,6 +254,12 @@ public class OrderController {
         response.setAddress(order.getAddress());
         response.setCreatedAt(order.getCreatedAt());
 
+        // FIX: map return fields so frontend receives them on every response
+        response.setReturnRequestedAt(order.getReturnRequestedAt());
+        response.setReturnCompletedAt(order.getReturnCompletedAt());
+        response.setRefundStatus(order.getRefundStatus());
+
+        // Backward-compat: prefer items[], fall back to legacy products[]
         List<OrderItem> rawItems = order.getItems();
         if (rawItems == null || rawItems.isEmpty()) {
             rawItems = order.getLegacyProducts();
