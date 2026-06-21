@@ -12,10 +12,15 @@ import java.util.List;
  * Response.items now contains full product snapshots so the frontend
  * can render order cards and order detail pages without any extra
  * product lookups.
+ *
+ * Return fields (additive):
+ *   returnRequestedAt — when customer initiated the return (null for non-returned orders)
+ *   returnCompletedAt — when return lifecycle finished (null until RETURN_SUCCESSFUL)
+ *   refundStatus      — "PENDING" | "PROCESSED" | null
  */
 public class OrderDto {
 
-    // ── Inbound ─────────────────────────────────────────────────────────────
+    // ── Inbound ────────────────────────────────────────────────────────
 
     @Data
     public static class Request {
@@ -31,7 +36,7 @@ public class OrderDto {
         private Address address;
     }
 
-    // ── Return request ────────────────────────────────────────────────────────
+    // ── Return request ───────────────────────────────────────────────────
 
     @Data
     public static class ReturnRequest {
@@ -42,7 +47,7 @@ public class OrderDto {
         private String requestedAt;
     }
 
-    // ── Outbound ─────────────────────────────────────────────────────────────
+    // ── Outbound ──────────────────────────────────────────────────────
 
     /**
      * Single order-item row returned inside every Order response.
@@ -102,17 +107,38 @@ public class OrderDto {
          * The frontend reads items[0].productName, items[0].imageUrl, etc.
          */
         private List<OrderItemResponse> items;
+
+        // ── Return fields (nullable — only populated for returned orders) ──
+
+        /**
+         * When the customer initiated the return.
+         * Null for all non-returned orders.
+         * Set by OrderService.returnOrder().
+         */
+        private LocalDateTime returnRequestedAt;
+
+        /**
+         * When the return lifecycle completed (status = RETURN_SUCCESSFUL).
+         * Null until the return is fully resolved.
+         */
+        private LocalDateTime returnCompletedAt;
+
+        /**
+         * Refund lifecycle state: "PENDING" | "PROCESSED" | null.
+         * Frontend shows this in the Order Details card for returned orders.
+         */
+        private String refundStatus;
     }
 
-    // ── Admin / internal ─────────────────────────────────────────────────────
+    // ── Admin / internal ──────────────────────────────────────────────────
 
     @Data
     public static class UpdateStatusRequest {
-        /** Target status, e.g. "SHIPPED", "DELIVERED", "CANCELLED", "RETURN_REQUESTED", "RETURNED". */
+        /** Target status, e.g. "SHIPPED", "DELIVERED", "CANCELLED", "RETURN_REQUESTED". */
         private String status;
     }
 
-    // ── Return status response ────────────────────────────────────────────────
+    // ── Return status response ────────────────────────────────────────────
 
     @Data
     public static class ReturnStatusResponse {
