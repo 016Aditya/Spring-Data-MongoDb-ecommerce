@@ -1,7 +1,10 @@
 package learnMongoDb.learnSpringMongoDb.entity;
+
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import lombok.Builder;
 import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -11,11 +14,13 @@ import java.time.LocalDateTime;
 
 @CompoundIndex(
         name = "user_product_review",
-        def = "{'productId':1,'userId':1}",
+        def = "{'productId': 1, 'userId': 1}",
         unique = true
 )
 @Data
 @Builder
+@AllArgsConstructor
+@NoArgsConstructor // This fixes the 400 Bad Request!
 @Document(collection = "reviews")
 public class Review {
 
@@ -33,4 +38,7 @@ public class Review {
 
     @CreatedDate
     private LocalDateTime createdAt;
+
+    private String userName;
+    private String userEmail;
 }

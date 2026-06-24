@@ -12,15 +12,6 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
 
-/**
- * User entity.
- *
- * Security notes
- * ──────────────
- * • passwordHash  – BCrypt-hashed password. Never store / return plain text.
- * • phoneNumber   – Stored for Forgot-Password identity verification ONLY.
- *                   No SMS / OTP integration is used.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -32,18 +23,16 @@ public class User {
     private String id;
 
     private String firstName;
+
     private String lastName;
 
     @Indexed(unique = true)
     private String email;
 
-    /** BCrypt hash – NEVER the raw password. */
+    // BCrypt hash – NEVER the raw password.
     private String passwordHash;
 
-    /**
-     * 10-digit mobile number stored for password-recovery identity
-     * verification only.  No SMS / OTP is sent.
-     */
+    // 10-digit mobile number stored for password-recovery identity verification
     private String phoneNumber;
 
     private String role;

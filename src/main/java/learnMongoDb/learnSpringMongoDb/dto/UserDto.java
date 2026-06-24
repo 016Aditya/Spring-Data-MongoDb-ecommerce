@@ -2,21 +2,12 @@ package learnMongoDb.learnSpringMongoDb.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 import java.time.Instant;
 
-/**
- * UserDto
- *
- * Data Transfer Objects for User API requests and responses.
- *
- * LoginResponse now includes a JWT token so the frontend can
- * store and send it on subsequent requests.
- */
 public class UserDto {
-
-    // ── Request DTOs ─────────────────────────────────────────────────────────
 
     @Data
     public static class Request {
@@ -31,8 +22,17 @@ public class UserDto {
         private String email;
 
         @NotBlank(message = "Password is required")
+        @Pattern(
+                regexp = "^(?=(?:.*\\d){2,})(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!]).{8,}$",
+                message = "Password must be at least 8 characters and contain one uppercase letter, one lowercase letter, two numbers, and one special character."
+        )
         private String password;
 
+        @NotBlank(message = "Phone number is required")
+        @Pattern(
+                regexp = "^[6-9]\\d{9}$",
+                message = "Enter a valid Indian mobile number."
+        )
         private String phoneNumber;
     }
 
@@ -44,7 +44,16 @@ public class UserDto {
         @NotBlank(message = "Last name is required")
         private String lastName;
 
+        @Pattern(
+                regexp = "^$|^[6-9]\\d{9}$",
+                message = "Enter a valid Indian mobile number."
+        )
         private String phoneNumber;
+
+        @Pattern(
+                regexp = "^$|^(?=(?:.*\\d){2,})(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!]).{8,}$",
+                message = "Password must be at least 8 characters and contain one uppercase letter, one lowercase letter, two numbers, and one special character."
+        )
         private String password;
     }
 
@@ -62,40 +71,48 @@ public class UserDto {
         private String email;
 
         @NotBlank(message = "Phone number is required")
+        @Pattern(
+                regexp = "^[6-9]\\d{9}$",
+                message = "Enter a valid Indian mobile number."
+        )
         private String phoneNumber;
     }
 
     @Data
     public static class ResetPasswordRequest {
-        @NotBlank private String email;
-        @NotBlank private String phoneNumber;
-        @NotBlank private String newPassword;
-    }
+        @NotBlank(message = "Email is required")
+        @Email(message = "Email must be valid")
+        private String email;
 
-    // ── Response DTOs ────────────────────────────────────────────────────────
+        @NotBlank(message = "Phone number is required")
+        @Pattern(
+                regexp = "^[6-9]\\d{9}$",
+                message = "Enter a valid Indian mobile number."
+        )
+        private String phoneNumber;
+
+        @NotBlank(message = "New password is required")
+        @Pattern(
+                regexp = "^(?=(?:.*\\d){2,})(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!]).{8,}$",
+                message = "Password must be at least 8 characters and contain one uppercase letter, one lowercase letter, two numbers, and one special character."
+        )
+        private String newPassword;
+    }
 
     @Data
     public static class Response {
-        private String  id;
-        private String  firstName;
-        private String  lastName;
-        private String  email;
-        private String  phoneNumber;
-        private String  role;
+        private String id;
+        private String firstName;
+        private String lastName;
+        private String email;
+        private String phoneNumber;
+        private String role;
         private Instant createdAt;
     }
 
-    /**
-     * LoginResponse
-     *
-     * Returned by POST /api/users/login.
-     * Contains the signed JWT plus the user profile.
-     * The frontend must store the token and include it in every subsequent
-     * request as:  Authorization: Bearer <token>
-     */
     @Data
     public static class LoginResponse {
-        private String   token;  // signed JWT
-        private Response user;   // user profile (for UI state — never trust client-side for auth)
+        private String token;
+        private Response user;
     }
 }

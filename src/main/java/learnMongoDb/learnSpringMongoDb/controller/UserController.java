@@ -1,6 +1,7 @@
 package learnMongoDb.learnSpringMongoDb.controller;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import learnMongoDb.learnSpringMongoDb.dto.UserDto;
 import learnMongoDb.learnSpringMongoDb.entity.User;
@@ -13,38 +14,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.ZoneOffset;
 import java.util.Map;
 
-/**
- * UserController
- *
- * Endpoints
- * ----------
- * POST   /api/users/register          - Create account
- * POST   /api/users/login             - Authenticate → returns JWT
- * GET    /api/users/{id}              - Get profile (own profile only)
- * PUT    /api/users/{id}              - Update profile (own profile only)
- * DELETE /api/users/{id}             - Delete account (own profile only)
- *
- * Forgot Password (no tokens / SMS)
- * POST   /api/users/forgot-password  - Step 1: check email exists
- * POST   /api/users/verify-identity  - Step 2: email + phone must match
- * POST   /api/users/reset-password   - Step 3: set new password
- *
- * Security changes:
- * - login() now issues a signed JWT containing userId (sub), email, role.
- * - Protected endpoints extract userId from the JWT principal, not the URL path,
- *   and reject requests where the path userId doesn't match the authenticated userId.
- */
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
-    private final JwtUtil    jwtUtil;
-
-    // Register ---------------------------------------------------------------
+    private final JwtUtil jwtUtil;
 
     @PostMapping("/register")
     public ResponseEntity<UserDto.Response> registerUser(
@@ -62,8 +41,6 @@ public class UserController {
         return ResponseEntity.ok(mapToResponse(savedUser));
     }
 
-    // Login — issues JWT -----------------------------------------------------
-
     @PostMapping("/login")
     public ResponseEntity<UserDto.LoginResponse> loginUser(
             @Valid @RequestBody LoginRequest loginRequest) {
@@ -72,8 +49,6 @@ public class UserController {
                 loginRequest.getEmail(),
                 loginRequest.getPassword());
 
-        // Generate a signed JWT with userId in the "sub" claim.
-        // The frontend stores this token and sends it as Authorization: Bearer <token>.
         String token = jwtUtil.generateToken(
                 loggedInUser.getId(),
                 loggedInUser.getEmail(),
@@ -85,8 +60,6 @@ public class UserController {
 
         return ResponseEntity.ok(body);
     }
-
-    // Get by ID — own profile only -------------------------------------------
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getUserById(
@@ -101,8 +74,6 @@ public class UserController {
                 .map(user -> ResponseEntity.ok(mapToResponse(user)))
                 .orElse(ResponseEntity.notFound().build());
     }
-
-    // Update profile — own profile only --------------------------------------
 
     @PutMapping("/{id}")
     public ResponseEntity<?> updateUserProfile(
@@ -124,8 +95,6 @@ public class UserController {
         return ResponseEntity.ok(mapToResponse(updatedUser));
     }
 
-    // Delete — own profile only ----------------------------------------------
-
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteUser(
             @PathVariable String id,
@@ -139,8 +108,6 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    // Forgot Password - Step 1 -----------------------------------------------
-
     @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, String>> forgotPassword(
             @Valid @RequestBody UserDto.ForgotPasswordRequest request) {
@@ -148,8 +115,6 @@ public class UserController {
         return ResponseEntity.ok(Map.of(
                 "message", "If an account with that email exists, you can proceed."));
     }
-
-    // Forgot Password - Step 2 -----------------------------------------------
 
     @PostMapping("/verify-identity")
     public ResponseEntity<Map<String, Object>> verifyIdentity(
@@ -171,8 +136,6 @@ public class UserController {
                 "message", "Identity verified. You may now set a new password."));
     }
 
-    // Forgot Password - Step 3 -----------------------------------------------
-
     @PostMapping("/reset-password")
     public ResponseEntity<Map<String, String>> resetPassword(
             @Valid @RequestBody UserDto.ResetPasswordRequest request) {
@@ -185,8 +148,6 @@ public class UserController {
         return ResponseEntity.ok(Map.of("message", "Password reset successfully."));
     }
 
-    // Helpers ----------------------------------------------------------------
-
     private UserDto.Response mapToResponse(User user) {
         UserDto.Response response = new UserDto.Response();
         response.setId(user.getId());
@@ -195,16 +156,17 @@ public class UserController {
         response.setEmail(user.getEmail());
         response.setPhoneNumber(user.getPhoneNumber());
         response.setRole(user.getRole());
-        response.setCreatedAt(user.getCreatedAt());
+        response.setCreatedAt(
+                user.getCreatedAt() != null
+                        ? user.getCreatedAt().toInstant(ZoneOffset.UTC)
+                        : null);
         return response;
     }
 
-    // Inline Login DTO -------------------------------------------------------
-
     @Data
     public static class LoginRequest {
-
         @NotBlank(message = "Email is required")
+        @Email(message = "Email must be valid")
         private String email;
 
         @NotBlank(message = "Password is required")

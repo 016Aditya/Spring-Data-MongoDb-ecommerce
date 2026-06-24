@@ -1,12 +1,12 @@
 package learnMongoDb.learnSpringMongoDb.service;
 
-import learnMongoDb.learnSpringMongoDb.entity.Product;
+import learnMongoDb.learnSpringMongoDb.dto.ReviewDto;
 import learnMongoDb.learnSpringMongoDb.entity.Review;
-import learnMongoDb.learnSpringMongoDb.repository.ProductRepository;
 import learnMongoDb.learnSpringMongoDb.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -14,144 +14,48 @@ import java.util.List;
 public class ReviewService {
 
     private final ReviewRepository reviewRepository;
-    private final ProductRepository productRepository;
 
     public Review addReview(Review review) {
+        review.setCreatedAt(LocalDateTime.now());
 
-        if (review.getRating() < 1 ||
-                review.getRating() > 5) {
-            throw new IllegalArgumentException(
-                    "Rating must be between 1 and 5."
-            );
-        }
+        // Note: If you want userName and userEmail to be saved directly on the Review document,
+        // you should fetch the User entity from UserRepository here and set those fields.
 
-        boolean alreadyReviewed =
-                reviewRepository.findByProductIdAndUserId(
-                        review.getProductId(),
-                        review.getUserId()
-                ).isPresent();
-
-        if (alreadyReviewed) {
-            throw new RuntimeException(
-                    "You have already reviewed this product."
-            );
-        }
-
-        Product product =
-                productRepository.findById(
-                        review.getProductId()
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "Product not found."
-                        ));
-
-        Review savedReview =
-                reviewRepository.save(review);
-
-        updateProductRating(product.getId());
-
-        return savedReview;
+        return reviewRepository.save(review);
     }
 
-    public List<Review> getReviewsByProduct(
-            String productId
-    ) {
-        return reviewRepository.findByProductId(
-                productId
-        );
+    public List<Review> getReviewsByProduct(String productId) {
+        return reviewRepository.findByProductId(productId);
     }
 
-    public Review updateReview(
-            String id,
-            Integer rating,
-            String comment
-    ) {
+    public Review updateReview(String reviewId, int rating, String comment, String currentUserId) {
+        Review existingReview = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new RuntimeException("Review not found with id: " + reviewId));
 
-        if (rating < 1 || rating > 5) {
-            throw new IllegalArgumentException(
-                    "Rating must be between 1 and 5."
-            );
+        // SECURE: Check if the logged-in user actually owns this review
+        if (!existingReview.getUserId().equals(currentUserId)) {
+            throw new RuntimeException("Forbidden: You can only edit your own reviews.");
         }
-
-        Review existingReview =
-                reviewRepository.findById(id)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Review not found with ID: " + id
-                                ));
 
         existingReview.setRating(rating);
         existingReview.setComment(comment);
 
-        Review updatedReview =
-                reviewRepository.save(
-                        existingReview
-                );
-
-        updateProductRating(
-                updatedReview.getProductId()
-        );
-
-        return updatedReview;
+        return reviewRepository.save(existingReview);
     }
 
-    public void deleteReview(String id) {
+    public void deleteReview(String reviewId, String currentUserId) {
+        Review existingReview = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new RuntimeException("Review not found with id: " + reviewId));
 
-        Review review =
-                reviewRepository.findById(id)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Review not found with ID: " + id
-                                ));
+        // SECURE: Check if the logged-in user actually owns this review
+        if (!existingReview.getUserId().equals(currentUserId)) {
+            throw new RuntimeException("Forbidden: You can only delete your own reviews.");
+        }
 
-        String productId =
-                review.getProductId();
-
-        reviewRepository.delete(review);
-
-        updateProductRating(productId);
+        reviewRepository.deleteById(reviewId);
     }
 
-    private void updateProductRating(
-            String productId
-    ) {
-
-        Product product =
-                productRepository.findById(productId)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Product not found."
-                                ));
-
-        List<Review> reviews =
-                reviewRepository.findByProductId(
-                        productId
-                );
-
-        int totalRatings =
-                reviews.size();
-
-        double averageRating =
-                reviews.stream()
-                        .mapToInt(
-                                Review::getRating
-                        )
-                        .average()
-                        .orElse(0.0);
-
-        averageRating =
-                Math.round(
-                        averageRating * 10.0
-                ) / 10.0;
-
-        product.setAverageRating(
-                averageRating
-        );
-
-        product.setTotalRatings(
-                totalRatings
-        );
-
-        productRepository.save(product);
+    public List<Review> searchReviews(ReviewDto.ProductSearchRequest request) {
+        return reviewRepository.findByProductId(request.getProductId());
     }
 }

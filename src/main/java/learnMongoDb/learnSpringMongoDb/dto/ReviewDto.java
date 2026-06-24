@@ -8,12 +8,11 @@ public class ReviewDto {
     @Data
     public static class Request {
         private String productId;
-        private String userId;
         private Integer rating;
         private String comment;
+        // userId is intentionally omitted for security!
     }
 
-    // NEW: DTO for searching reviews via a POST body
     @Data
     public static class ProductSearchRequest {
         private String productId;
@@ -24,6 +23,8 @@ public class ReviewDto {
         private String id;
         private String productId;
         private String userId;
+        private String userName;
+        private String userEmail;
         private Integer rating;
         private String comment;
         private LocalDateTime createdAt;

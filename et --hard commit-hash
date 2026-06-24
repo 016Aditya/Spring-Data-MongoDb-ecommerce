@@ -1,0 +1,38 @@
+[33m78b4191[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix: remove all git conflict markers from all files
+[33mdbca95f[m fix: remove git conflict markers from OrderItem.java
+[33me648f03[m fix: resolve all stash merge conflicts — reset to origin/main
+[33ma995612[m fix: enable CORS in SecurityFilterChain to resolve 302 redirect & CORS errors
+[33m76ad6d7[m fix(order): change customer return endpoint to @PatchMapping; move admin update to /return/status; map return fields in mapToResponse()
+[33mcc5ab74[m fix(order): expose returnRequestedAt, returnCompletedAt, refundStatus in OrderDto.Response
+[33m0898fb7[m fix(order): returnOrder() now sets returnRequestedAt + refundStatus; add admin stub methods
+[33mbe31c67[m fix(order): add returnRequestedAt, returnCompletedAt, refundStatus fields to Order entity
+[33m46d8055[m fix(security): implement JWT auth — extract userId from token, not request body
+[33m6498736[m fix: support phoneNumber in profile update + return it in response + handle user-not-found as 404
+[33m2db59bd[m fix: restore order seeder address shape to match updated Address entity
+[33m3aa0475[m fix: expand Address fields to match frontend normalizeToStore output
+[33mb6c5a84[m fix: resolve 2 build errors in DatabaseSeeder
+[33m13290c4[m fix: expose imageUrl alias in OrderItemResponse so frontend normalizer picks it on first priority
+[33m1824a75[m fix(orders): map legacy 'products' field + seed sample orders with full item snapshots
+[33m34e80b1[m feat(orders): add return endpoint + RETURN_REQUESTED status support
+[33mbc3f6c2[m fix: restore original DatabaseSeeder with all products (Electronics, Clothing, Books, Home, Sports)
+[33m61921a1[m fix: revert DatabaseSeeder to products-only — remove OrderRepository injection and seedOrders()
+[33meefe84d[m fix: add OrderItem snapshot — product name/image/price now stored on order creation
+[33m6f4f367[m fix(auth): complete backend auth audit — 3 root-cause fixes
+[33m94de6ca[m fix: add @NoArgsConstructor/@AllArgsConstructor to Order; fix unused ConnectionBuilder import; fix per-item quantity pricing in Order
+[33m4c25572[m feat: add phoneNumber to register; add /forgot-password, /verify-identity, /reset-password endpoints; wire BCrypt UserService
+[33m7114494[m fix(security): hash passwords with BCrypt; add phoneNumber; add forgotPassword flow
+[33m5213349[m feat: add phoneNumber to UserDto; add ForgotPasswordRequest, VerifyIdentityRequest, ResetPasswordRequest
+[33m9c73de9[m fix: add phoneNumber + passwordHash to User entity; remove plain-text password field
+[33m585bb57[m feat: featured products endpoint + DTO/controller fixes
+[33mfbaeb88[m Database Seeder updated
+[33m03af98c[m Testing
+[33m3823ab8[m Remove project overview and structure from README
+[33m8c08211[m Initialize README with project details and setup
+[33m934b13a[m feat: implement delete endpoints for products, users, reviews, and cart items
+[33me40098c[m implement update endpoints, DTOs, and global exception handling
+[33md0027eb[m Dto added and Controller updated with Api tested
+[33mbe70665[m Controller and Service Added
+[33m0befa5e[m Added Criteria Api
+[33me2e7a87[m Mongo Template Added
+[33mdaceb59[m first commit
+[33m6b47ab8[m first commit

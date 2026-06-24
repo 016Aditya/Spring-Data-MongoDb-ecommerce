@@ -19,18 +19,16 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * JWT-based stateless security configuration.
  *
  * Public endpoints (no token required):
- *   POST /api/users/register
- *   POST /api/users/login
- *   POST /api/users/forgot-password
- *   POST /api/users/verify-identity
- *   POST /api/users/reset-password
- *   GET  /api/products/**       (guest browsing)
+ * POST /api/users/register
+ * POST /api/users/login
+ * POST /api/users/forgot-password
+ * POST /api/users/verify-identity
+ * POST /api/users/reset-password
+ * GET  /api/products/** (guest browsing)
+ * GET  /api/reviews/** (guest reading reviews)
+ * POST /api/reviews/search    (guest filtering reviews)
  *
  * All other endpoints require a valid Bearer JWT in the Authorization header.
- *
- * The JwtAuthFilter runs before Spring Security's UsernamePasswordAuthenticationFilter.
- * It extracts the userId from the JWT "sub" claim and places a CustomUserDetails
- * principal into the SecurityContext — controllers then read it via @AuthenticationPrincipal.
  */
 @Configuration
 @EnableWebSecurity
@@ -42,37 +40,42 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            // Tell Spring Security to honour the CorsFilter bean defined in CorsConfig.
-            // Without this line Spring Security intercepts OPTIONS preflight requests
-            // before the CorsFilter runs, returning a 302 redirect instead of the
-            // required CORS headers — which is what caused the browser errors.
-            .cors(Customizer.withDefaults())
+                // Tell Spring Security to honour the CorsFilter bean defined in CorsConfig.
+                .cors(Customizer.withDefaults())
 
-            .csrf(AbstractHttpConfigurer::disable)
+                .csrf(AbstractHttpConfigurer::disable)
 
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-            .authorizeHttpRequests(auth -> auth
+                .authorizeHttpRequests(auth -> auth
 
-                // Auth endpoints — no token available yet
-                .requestMatchers(HttpMethod.POST, "/api/users/register").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/users/login").permitAll()
+                        // Auth endpoints — no token available yet
+                        .requestMatchers(HttpMethod.POST, "/api/users/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users/login").permitAll()
 
-                // Forgot-password flow — unauthenticated by definition
-                .requestMatchers(HttpMethod.POST, "/api/users/forgot-password").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/users/verify-identity").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/users/reset-password").permitAll()
+                        // Forgot-password flow — unauthenticated by definition
+                        .requestMatchers(HttpMethod.POST, "/api/users/forgot-password").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users/verify-identity").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/users/reset-password").permitAll()
 
-                // Product catalogue is public for guest browsing
-                .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+                        // Product catalogue is public for guest browsing
+                        .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
 
-                // All other endpoints require a valid JWT
-                .anyRequest().authenticated()
-            )
+                        // Public Review endpoints for guests
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/reviews/search").permitAll()
 
-            // Register JWT filter before the default username/password filter
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                        // --- FIX: Allow guest access to the Cart ---
+                        // Note: We use the generic path without HttpMethod to allow GET, POST, PUT, DELETE
+                        .requestMatchers("/api/cart/**").permitAll()
+
+                        // All other endpoints (e.g., POST /api/reviews, PUT, DELETE) require a valid JWT
+                        .anyRequest().authenticated()
+                )
+
+                // Register JWT filter before the default username/password filter
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
