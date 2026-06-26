@@ -4,17 +4,20 @@ import learnMongoDb.learnSpringMongoDb.entity.CartItem;
 import learnMongoDb.learnSpringMongoDb.entity.ShoppingCart;
 import learnMongoDb.learnSpringMongoDb.repository.ShoppingCartRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ShoppingCartService {
 
     private final ShoppingCartRepository cartRepository;
 
-    // Fetches the cart, or creates a new one if it doesn't exist
+    // ── GET OR CREATE CART ─────────────────────────────────────────────
+
     public ShoppingCart getCartByUserId(String userId) {
         return cartRepository.findByUserId(userId)
                 .orElseGet(() -> createEmptyCart(userId));
@@ -26,8 +29,12 @@ public class ShoppingCartService {
                 .items(new ArrayList<>())
                 .cartTotal(0.0)
                 .build();
+
+        log.info("Created new empty cart for user: {}", userId);
         return cartRepository.save(newCart);
     }
+
+    // ── ADD ITEM ───────────────────────────────────────────────────────
 
     public ShoppingCart addItemToCart(String userId, CartItem newItem) {
         ShoppingCart cart = getCartByUserId(userId);
@@ -47,22 +54,13 @@ public class ShoppingCartService {
             cart.getItems().add(newItem);
         }
 
-        // Recalculate total price of the cart
-        double newTotal = cart.getItems().stream()
-                .mapToDouble(item -> item.getQuantity() * item.getUnitPrice())
-                .sum();
-
-        cart.setCartTotal(newTotal);
+        recalculateTotal(cart);
+        log.info("Added item {} to cart for user: {}", newItem.getProductId(), userId);
 
         return cartRepository.save(cart);
     }
 
-    public void clearCart(String userId) {
-        ShoppingCart cart = getCartByUserId(userId);
-        cart.getItems().clear();
-        cart.setCartTotal(0.0);
-        cartRepository.save(cart);
-    }
+    // ── UPDATE ITEM QUANTITY ───────────────────────────────────────────
 
     public ShoppingCart updateItemQuantity(String userId, String productId, int newQuantity) {
         ShoppingCart cart = cartRepository.findByUserId(userId)
@@ -71,6 +69,7 @@ public class ShoppingCartService {
         if (newQuantity <= 0) {
             // If quantity is 0 or less, remove the item from the list completely
             cart.getItems().removeIf(item -> item.getProductId().equals(productId));
+            log.info("Removed item {} from cart for user: {} due to zero quantity", productId, userId);
         } else {
             // Find the item and update its quantity
             cart.getItems().stream()
@@ -82,20 +81,11 @@ public class ShoppingCartService {
                     );
         }
 
-        // Recalculate the total price of the cart
-        // Recalculate the total price of the cart
-        double total = cart.getItems().stream()
-                .mapToDouble(item -> item.getUnitPrice() * item.getQuantity())
-                .sum();
-
-        // CHANGE THIS LINE:
-        // cart.setTotalPrice(total);
-
-        // TO THIS:
-        cart.setCartTotal(total);
-
+        recalculateTotal(cart);
         return cartRepository.save(cart);
     }
+
+    // ── REMOVE ITEM ────────────────────────────────────────────────────
 
     public ShoppingCart removeItemFromCart(String userId, String productId) {
         ShoppingCart cart = cartRepository.findByUserId(userId)
@@ -113,13 +103,33 @@ public class ShoppingCartService {
             throw new RuntimeException("Item not found in cart!");
         }
 
-        // Recalculate the total price of the cart without that item
+        recalculateTotal(cart);
+        log.info("Removed item {} from cart for user: {}", productId, userId);
+
+        return cartRepository.save(cart);
+    }
+
+    // ── CLEAR CART ─────────────────────────────────────────────────────
+
+    public void clearCart(String userId) {
+        ShoppingCart cart = getCartByUserId(userId);
+        cart.getItems().clear();
+        cart.setCartTotal(0.0);
+        cartRepository.save(cart);
+
+        log.info("Cleared cart for user: {}", userId);
+    }
+
+    // ── PRIVATE HELPERS ────────────────────────────────────────────────
+
+    /**
+     * Helper method to keep total calculation DRY (Don't Repeat Yourself).
+     */
+    private void recalculateTotal(ShoppingCart cart) {
         double total = cart.getItems().stream()
                 .mapToDouble(item -> item.getUnitPrice() * item.getQuantity())
                 .sum();
 
         cart.setCartTotal(total);
-
-        return cartRepository.save(cart);
     }
 }

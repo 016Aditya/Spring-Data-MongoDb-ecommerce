@@ -10,11 +10,11 @@ import learnMongoDb.learnSpringMongoDb.security.JwtUtil;
 import learnMongoDb.learnSpringMongoDb.service.UserService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.ZoneOffset;
 import java.util.Map;
 
 @RestController
@@ -24,21 +24,19 @@ public class UserController {
 
     private final UserService userService;
     private final JwtUtil jwtUtil;
+    private final ModelMapper modelMapper; // ── Inject ModelMapper ──
+
+    // ── REGISTRATION & LOGIN ──────────────────────────────────────────
 
     @PostMapping("/register")
     public ResponseEntity<UserDto.Response> registerUser(
             @Valid @RequestBody UserDto.Request request) {
 
-        User userToSave = User.builder()
-                .firstName(request.getFirstName())
-                .lastName(request.getLastName())
-                .email(request.getEmail())
-                .passwordHash(request.getPassword())
-                .phoneNumber(request.getPhoneNumber())
-                .build();
+        // ModelMapper maps the DTO to the Entity, including password -> passwordHash
+        User userToSave = modelMapper.map(request, User.class);
 
         User savedUser = userService.createUser(userToSave);
-        return ResponseEntity.ok(mapToResponse(savedUser));
+        return ResponseEntity.ok(modelMapper.map(savedUser, UserDto.Response.class));
     }
 
     @PostMapping("/login")
@@ -49,17 +47,24 @@ public class UserController {
                 loginRequest.getEmail(),
                 loginRequest.getPassword());
 
+        String firstName = loggedInUser.getFirstName() != null ? loggedInUser.getFirstName() : "";
+        String lastName  = loggedInUser.getLastName()  != null ? loggedInUser.getLastName()  : "";
+        String fullName  = (firstName + " " + lastName).trim();
+
         String token = jwtUtil.generateToken(
                 loggedInUser.getId(),
                 loggedInUser.getEmail(),
-                loggedInUser.getRole());
+                loggedInUser.getRole(),
+                fullName);
 
         UserDto.LoginResponse body = new UserDto.LoginResponse();
         body.setToken(token);
-        body.setUser(mapToResponse(loggedInUser));
+        body.setUser(modelMapper.map(loggedInUser, UserDto.Response.class));
 
         return ResponseEntity.ok(body);
     }
+
+    // ── PROFILE MANAGEMENT ────────────────────────────────────────────
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getUserById(
@@ -71,7 +76,7 @@ public class UserController {
         }
 
         return userService.getUserById(id)
-                .map(user -> ResponseEntity.ok(mapToResponse(user)))
+                .map(user -> ResponseEntity.ok(modelMapper.map(user, UserDto.Response.class)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -85,6 +90,8 @@ public class UserController {
             return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
         }
 
+        // Keeping your existing field-by-field pass to the service here
+        // since it handles complex null-checking and partial updates perfectly.
         User updatedUser = userService.updateUserProfile(
                 id,
                 request.getFirstName(),
@@ -92,7 +99,7 @@ public class UserController {
                 request.getPhoneNumber(),
                 request.getPassword());
 
-        return ResponseEntity.ok(mapToResponse(updatedUser));
+        return ResponseEntity.ok(modelMapper.map(updatedUser, UserDto.Response.class));
     }
 
     @DeleteMapping("/{id}")
@@ -107,6 +114,8 @@ public class UserController {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
     }
+
+    // ── PASSWORD RECOVERY ─────────────────────────────────────────────
 
     @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, String>> forgotPassword(
@@ -146,21 +155,6 @@ public class UserController {
                 request.getNewPassword());
 
         return ResponseEntity.ok(Map.of("message", "Password reset successfully."));
-    }
-
-    private UserDto.Response mapToResponse(User user) {
-        UserDto.Response response = new UserDto.Response();
-        response.setId(user.getId());
-        response.setFirstName(user.getFirstName());
-        response.setLastName(user.getLastName());
-        response.setEmail(user.getEmail());
-        response.setPhoneNumber(user.getPhoneNumber());
-        response.setRole(user.getRole());
-        response.setCreatedAt(
-                user.getCreatedAt() != null
-                        ? user.getCreatedAt().toInstant(ZoneOffset.UTC)
-                        : null);
-        return response;
     }
 
     @Data

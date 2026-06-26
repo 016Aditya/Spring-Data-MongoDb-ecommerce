@@ -17,9 +17,10 @@ import java.util.Date;
  * Handles JWT creation and validation.
  *
  * Token claims:
- *   sub   — MongoDB userId (the _id field of the User document)
- *   email — user's email address
- *   role  — user's role (USER / ADMIN)
+ *   sub      — MongoDB userId (the _id field of the User document)
+ *   email    — user's email address
+ *   role     — user's role (USER / ADMIN)
+ *   fullName — firstName + " " + lastName (used by ReviewController to set userName)
  *
  * The secret is injected from application.properties (jwt.secret).
  * Minimum recommended secret length: 32 characters.
@@ -40,19 +41,21 @@ public class JwtUtil {
     // ── Token generation ─────────────────────────────────────────────────────
 
     /**
-     * Creates a signed JWT embedding userId, email, and role.
+     * Creates a signed JWT embedding userId, email, role, and fullName.
      *
-     * @param userId MongoDB _id of the authenticated user
-     * @param email  user's email (informational, not used for auth decisions)
-     * @param role   user's role string ("USER" or "ADMIN")
+     * @param userId    MongoDB _id of the authenticated user
+     * @param email     user's email (informational, not used for auth decisions)
+     * @param role      user's role string ("USER" or "ADMIN")
+     * @param fullName  firstName + " " + lastName — stored as the "fullName" claim
      * @return compact signed JWT string
      */
-    public String generateToken(String userId, String email, String role) {
+    public String generateToken(String userId, String email, String role, String fullName) {
         long now = System.currentTimeMillis();
         return Jwts.builder()
                 .subject(userId)              // sub = userId — this is what the filter trusts
-                .claim("email", email)
-                .claim("role", role)
+                .claim("email",    email)
+                .claim("role",     role)
+                .claim("fullName", fullName)  // NEW — used to display real name on reviews
                 .issuedAt(new Date(now))
                 .expiration(new Date(now + expirationMs))
                 .signWith(signingKey)
@@ -85,6 +88,10 @@ public class JwtUtil {
 
     public String extractRole(String token) {
         return validateAndExtractClaims(token).get("role", String.class);
+    }
+
+    public String extractFullName(String token) {
+        return validateAndExtractClaims(token).get("fullName", String.class);
     }
 
     /**

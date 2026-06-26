@@ -11,15 +11,9 @@ import org.springframework.data.mongodb.core.mapping.Document;
 /**
  * Product document stored in the "products" MongoDB collection.
  *
- * Hierarchy example:
- *   category    = "Electronics"    subcategory = "Mobile"
- *   category    = "Electronics"    subcategory = "Laptop"
- *   category    = "Clothing"       subcategory = "Shirt"
- *   category    = "Clothing"       subcategory = "Shoes"
- *   category    = "Books"          subcategory = "Stationery"
- *
- * averageRating and totalRatings are computed dynamically
- * from the Review collection — never set manually.
+ * averageRating and totalRatings are managed exclusively by ReviewService.
+ * They are recalculated after every review add / update / delete.
+ * Never set them manually.
  */
 @NoArgsConstructor
 @AllArgsConstructor
@@ -33,46 +27,43 @@ public class Product {
 
     private String name;
 
-    /** Top-level category, e.g. Electronics, Clothing, Books */
     @Indexed
     private String category;
 
-    /** Sub-type within a category, e.g. Mobile, Laptop, Shirt, Shoes */
     @Indexed
     private String subcategory;
 
-    /** Brand name, e.g. Samsung, Nike, Penguin */
     private String brand;
 
     @Indexed
     private double price;
 
-    /** Available stock count */
+    /**
+     * Original / MRP price before any discount.
+     * If set and greater than price, the frontend shows a strikethrough
+     * original price and a discount percentage badge.
+     */
+    private double originalPrice;
+
     private int stock;
 
     private String imageUrl;
 
     private String description;
 
-    /**
-     * Whether this product is featured on the homepage.
-     * Primitive boolean — Lombok generates isFeatured() correctly.
-     */
     @Builder.Default
     private boolean featured = false;
 
     /**
      * Dynamically calculated average from the Review collection.
-     * Updated by ReviewService whenever a review is added/updated/deleted.
-     * Never seeded manually.
+     * Updated by ReviewService — never seed manually.
      */
     @Builder.Default
     private Double averageRating = 0.0;
 
     /**
      * Total number of reviews for this product.
-     * Kept in sync with the Review collection by ReviewService.
-     * Never seeded manually.
+     * Kept in sync by ReviewService — never seed manually.
      */
     @Builder.Default
     private Integer totalRatings = 0;

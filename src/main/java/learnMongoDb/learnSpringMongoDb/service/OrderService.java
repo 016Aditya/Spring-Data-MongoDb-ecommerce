@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * OrderService — handles all business logic for orders.
@@ -35,9 +34,9 @@ public class OrderService {
      * Creates an order from a list of product IDs.
      *
      * For each ID:
-     *   1. Fetches the live Product document from MongoDB.
-     *   2. Builds an OrderItem snapshot (name, image, price — frozen at purchase time).
-     *   3. Accumulates totalPrice and totalQuantity server-side.
+     * 1. Fetches the live Product document from MongoDB.
+     * 2. Builds an OrderItem snapshot (name, image, price — frozen at purchase time).
+     * 3. Accumulates totalPrice and totalQuantity server-side.
      *
      * The resulting Order.items list is what the frontend renders.
      * No secondary product lookups are ever needed after this point.
@@ -130,9 +129,9 @@ public class OrderService {
      * Business rule: only DELIVERED orders can be returned.
      *
      * Sets:
-     *   status            → RETURN_REQUESTED
-     *   returnRequestedAt → now()
-     *   refundStatus      → "PENDING"
+     * status            → RETURN_REQUESTED
+     * returnRequestedAt → now()
+     * refundStatus      → "PENDING"
      *
      * @param orderId  The order to return.
      * @param reason   Customer-supplied return reason (may be empty string).

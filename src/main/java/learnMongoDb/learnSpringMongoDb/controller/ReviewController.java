@@ -28,8 +28,13 @@ public class ReviewController {
 
         Review reviewToSave = modelMapper.map(request, Review.class);
 
-        // SECURE: Set userId strictly from the JWT
+        // SECURE: Set user details strictly from the JWT — never trust the client
         reviewToSave.setUserId(currentUser.getUserId());
+        reviewToSave.setUserName(currentUser.getFullName());
+
+        // ADDED: Populate the email so it doesn't save as null!
+        // (Assuming your CustomUserDetails uses the email as the Spring Security 'username')
+        reviewToSave.setUserEmail(currentUser.getUsername());
 
         Review savedReview = reviewService.addReview(reviewToSave);
         return ResponseEntity.ok(modelMapper.map(savedReview, ReviewDto.Response.class));
@@ -70,17 +75,5 @@ public class ReviewController {
         // Pass the JWT userId down to the service to verify ownership
         reviewService.deleteReview(id, currentUser.getUserId());
         return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping("/search")
-    public ResponseEntity<List<ReviewDto.Response>> searchReviewsByProduct(
-            @RequestBody ReviewDto.ProductSearchRequest request) {
-
-        List<ReviewDto.Response> responses = reviewService.searchReviews(request)
-                .stream()
-                .map(review -> modelMapper.map(review, ReviewDto.Response.class))
-                .collect(Collectors.toList());
-
-        return ResponseEntity.ok(responses);
     }
 }

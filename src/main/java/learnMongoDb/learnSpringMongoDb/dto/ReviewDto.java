@@ -14,11 +14,6 @@ public class ReviewDto {
     }
 
     @Data
-    public static class ProductSearchRequest {
-        private String productId;
-    }
-
-    @Data
     public static class Response {
         private String id;
         private String productId;
@@ -34,5 +29,10 @@ public class ReviewDto {
     public static class UpdateRequest {
         private Integer rating;
         private String comment;
+    }
+
+    @Data
+    public static class ProductSearchRequest {
+        private String productId;
     }
 }
