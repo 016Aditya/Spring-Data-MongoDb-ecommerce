@@ -32,8 +32,6 @@ import java.util.Map;
  *                                        AuthenticationEntryPoint returns 401 if needed)
  *   • Invalid / expired / bad token    → write HTTP 401 immediately and stop.
  *                                        Do NOT continue the filter chain.
- *                                        This prevents Spring Security's AccessDeniedHandler
- *                                        from returning a confusing 403 for an auth failure.
  *   • Valid token                       → populate SecurityContext, continue chain.
  */
 @Component
@@ -51,37 +49,33 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         final String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
 
-        // No Authorization header or not a Bearer token — let the request through.
-        // Spring Security will enforce permitAll / authenticated rules downstream.
-        // If the endpoint is protected and there is no principal, the
-        // AuthenticationEntryPoint will return 401.
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        final String token = authHeader.substring(7); // strip "Bearer "
+        final String token = authHeader.substring(7);
 
         try {
             Claims claims = jwtUtil.validateAndExtractClaims(token);
 
-            // Only set the authentication if the SecurityContext is currently empty
-            // (avoids overwriting an already-authenticated context)
             if (SecurityContextHolder.getContext().getAuthentication() == null) {
 
-                String userId   = claims.getSubject();                      // trusted userId from JWT
-                String role     = claims.get("role",     String.class);     // trusted role from JWT
-                String fullName = claims.get("fullName", String.class);     // display name from JWT
+                String userId   = claims.getSubject();
+                String email    = claims.get("email",    String.class);  // FIX: was missing
+                String role     = claims.get("role",     String.class);
+                String fullName = claims.get("fullName", String.class);
 
-                // Fallback: if an old token was issued before fullName was added, use empty string
+                if (email    == null) email    = "";
                 if (fullName == null) fullName = "";
 
-                CustomUserDetails principal = new CustomUserDetails(userId, role, fullName);
+                // Constructor signature: CustomUserDetails(userId, email, role, fullName)
+                CustomUserDetails principal = new CustomUserDetails(userId, email, role, fullName);
 
                 UsernamePasswordAuthenticationToken authToken =
                         new UsernamePasswordAuthenticationToken(
                                 principal,
-                                null,               // credentials — not needed post-validation
+                                null,
                                 principal.getAuthorities());
 
                 authToken.setDetails(
@@ -91,17 +85,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
 
         } catch (JwtException | IllegalArgumentException e) {
-            // Token is present but invalid (expired, bad signature, malformed).
-            // Write 401 directly and stop — do NOT continue the filter chain.
-            //
-            // OLD behaviour: clear context and call filterChain.doFilter() — Spring
-            // Security then saw an unauthenticated request on a protected endpoint
-            // and returned 403 (AccessDeniedHandler) instead of 401, because no
-            // AuthenticationEntryPoint was configured. This confused the frontend
-            // into thinking the user was authenticated but lacked a role, when the
-            // real problem was simply an expired/rotated JWT.
             SecurityContextHolder.clearContext();
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);  // 401
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             objectMapper.writeValue(
                     response.getWriter(),
@@ -110,7 +95,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                             "message", "Your session has expired or the token is invalid. Please log in again."
                     )
             );
-            return; // stop — do not continue the filter chain
+            return;
         }
 
         filterChain.doFilter(request, response);

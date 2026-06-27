@@ -82,13 +82,16 @@ public class MappingConfig {
         });
 // ── 6. Custom Mapping for User <-> UserDto ──
 
-        // Converter to handle LocalDateTime to Instant conversion for timestamps
-        Converter<java.time.LocalDateTime, java.time.Instant> dateConverter = context ->
-                context.getSource() != null ? context.getSource().toInstant(java.time.ZoneOffset.UTC) : null;
+        // Pass-through converter: Safely passes the Instant directly without trying to modify it
+        Converter<java.time.Instant, java.time.Instant> instantPassThroughConverter = context ->
+                context.getSource();
 
         // Map Entity to Response DTO
         modelMapper.typeMap(User.class, UserDto.Response.class).addMappings(mapper -> {
-            mapper.using(dateConverter).map(User::getCreatedAt, UserDto.Response::setCreatedAt);
+            mapper.using(instantPassThroughConverter).map(User::getCreatedAt, UserDto.Response::setCreatedAt);
+
+            // If you also have an updatedAt field, map it the exact same way:
+            // mapper.using(instantPassThroughConverter).map(User::getUpdatedAt, UserDto.Response::setUpdatedAt);
         });
 
         // Map Request DTO to Entity (handling the password field name mismatch)
