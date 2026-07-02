@@ -1,5 +1,7 @@
 package learnMongoDb.learnSpringMongoDb.service;
 
+import learnMongoDb.learnSpringMongoDb.dto.UserDto;
+import learnMongoDb.learnSpringMongoDb.entity.Address;
 import learnMongoDb.learnSpringMongoDb.entity.User;
 import learnMongoDb.learnSpringMongoDb.error.UserNotFoundException;
 import learnMongoDb.learnSpringMongoDb.repository.UserRepository;
@@ -46,14 +48,33 @@ public class UserService {
         return user;
     }
 
-    public User updateUserProfile(String id, String firstName, String lastName, String phoneNumber, String rawPassword) {
+    /**
+     * updateUserProfile — persists all editable profile fields including address.
+     *
+     * @param id          MongoDB user document ID
+     * @param firstName   Required — from UpdateProfileRequest
+     * @param lastName    Required — from UpdateProfileRequest
+     * @param phoneNumber Optional — only updated when non-blank and different from current
+     * @param rawPassword Optional — only updated when non-blank
+     * @param addressReq  Optional — when non-null, replaces the embedded address sub-document
+     */
+    public User updateUserProfile(
+            String id,
+            String firstName,
+            String lastName,
+            String phoneNumber,
+            String rawPassword,
+            UserDto.AddressRequest addressReq) {
+
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException("User not found with ID: " + id));
 
         user.setFirstName(firstName);
         user.setLastName(lastName);
 
-        if (phoneNumber != null && !phoneNumber.isBlank() && !phoneNumber.equals(user.getPhoneNumber())) {
+        // Phone — only update if changed; guard against duplicates
+        if (phoneNumber != null && !phoneNumber.isBlank() &&
+                !phoneNumber.equals(user.getPhoneNumber())) {
             userRepository.findByPhoneNumber(phoneNumber)
                     .ifPresent(existing -> {
                         throw new RuntimeException("Phone number already in use.");
@@ -61,8 +82,24 @@ public class UserService {
             user.setPhoneNumber(phoneNumber);
         }
 
+        // Password — only re-hash when a new value is explicitly supplied
         if (rawPassword != null && !rawPassword.isBlank()) {
             user.setPasswordHash(PASSWORD_ENCODER.encode(rawPassword));
+        }
+
+        // Address — replace the embedded sub-document when provided
+        if (addressReq != null) {
+            Address address = Address.builder()
+                    .fullName(addressReq.getFullName())
+                    .phoneNumber(addressReq.getPhoneNumber())
+                    .addressLine1(addressReq.getAddressLine1())
+                    .addressLine2(addressReq.getAddressLine2())
+                    .city(addressReq.getCity())
+                    .state(addressReq.getState())
+                    .zipCode(addressReq.getZipCode())
+                    .country(addressReq.getCountry())
+                    .build();
+            user.setAddress(address);
         }
 
         return userRepository.save(user);

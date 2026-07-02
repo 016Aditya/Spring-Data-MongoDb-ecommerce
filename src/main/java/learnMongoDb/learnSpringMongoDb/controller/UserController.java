@@ -24,19 +24,17 @@ public class UserController {
 
     private final UserService userService;
     private final JwtUtil jwtUtil;
-    private final ModelMapper modelMapper; // ── Inject ModelMapper ──
+    private final ModelMapper modelMapper;
 
-    // ── REGISTRATION & LOGIN ──────────────────────────────────────────
+    // ── REGISTRATION & LOGIN ──────────────────────────────────────────────────
 
     @PostMapping("/register")
     public ResponseEntity<UserDto.Response> registerUser(
             @Valid @RequestBody UserDto.Request request) {
 
-        // ModelMapper maps the DTO to the Entity, including password -> passwordHash
         User userToSave = modelMapper.map(request, User.class);
-
-        User savedUser = userService.createUser(userToSave);
-        return ResponseEntity.ok(modelMapper.map(savedUser, UserDto.Response.class));
+        User savedUser  = userService.createUser(userToSave);
+        return ResponseEntity.ok(toResponse(savedUser));
     }
 
     @PostMapping("/login")
@@ -47,24 +45,20 @@ public class UserController {
                 loginRequest.getEmail(),
                 loginRequest.getPassword());
 
-        String firstName = loggedInUser.getFirstName() != null ? loggedInUser.getFirstName() : "";
-        String lastName  = loggedInUser.getLastName()  != null ? loggedInUser.getLastName()  : "";
-        String fullName  = (firstName + " " + lastName).trim();
-
         String token = jwtUtil.generateToken(
                 loggedInUser.getId(),
                 loggedInUser.getEmail(),
                 loggedInUser.getRole(),
-                fullName);
+                toFullName(loggedInUser));
 
         UserDto.LoginResponse body = new UserDto.LoginResponse();
         body.setToken(token);
-        body.setUser(modelMapper.map(loggedInUser, UserDto.Response.class));
+        body.setUser(toResponse(loggedInUser));
 
         return ResponseEntity.ok(body);
     }
 
-    // ── PROFILE MANAGEMENT ────────────────────────────────────────────
+    // ── PROFILE MANAGEMENT ────────────────────────────────────────────────────
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getUserById(
@@ -76,7 +70,7 @@ public class UserController {
         }
 
         return userService.getUserById(id)
-                .map(user -> ResponseEntity.ok(modelMapper.map(user, UserDto.Response.class)))
+                .map(user -> ResponseEntity.ok(toResponse(user)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -90,16 +84,15 @@ public class UserController {
             return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
         }
 
-        // Keeping your existing field-by-field pass to the service here
-        // since it handles complex null-checking and partial updates perfectly.
         User updatedUser = userService.updateUserProfile(
                 id,
                 request.getFirstName(),
                 request.getLastName(),
                 request.getPhoneNumber(),
-                request.getPassword());
+                request.getPassword(),
+                request.getAddress());   // ← address arg wired in
 
-        return ResponseEntity.ok(modelMapper.map(updatedUser, UserDto.Response.class));
+        return ResponseEntity.ok(toResponse(updatedUser));
     }
 
     @DeleteMapping("/{id}")
@@ -115,7 +108,7 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    // ── PASSWORD RECOVERY ─────────────────────────────────────────────
+    // ── PASSWORD RECOVERY ─────────────────────────────────────────────────────
 
     @PostMapping("/forgot-password")
     public ResponseEntity<Map<String, String>> forgotPassword(
@@ -157,6 +150,25 @@ public class UserController {
         return ResponseEntity.ok(Map.of("message", "Password reset successfully."));
     }
 
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    /**
+     * Maps a User entity to UserDto.Response and populates the convenience
+     * `fullName` field that the frontend reads directly.
+     */
+    private UserDto.Response toResponse(User user) {
+        UserDto.Response resp = modelMapper.map(user, UserDto.Response.class);
+        resp.setFullName(toFullName(user));
+        return resp;
+    }
+
+    private String toFullName(User user) {
+        String first = user.getFirstName() != null ? user.getFirstName() : "";
+        String last  = user.getLastName()  != null ? user.getLastName()  : "";
+        return (first + " " + last).trim();
+    }
+
+    // ── Inner login-request DTO ───────────────────────────────────────────────
     @Data
     public static class LoginRequest {
         @NotBlank(message = "Email is required")

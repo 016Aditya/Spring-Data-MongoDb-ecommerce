@@ -1,10 +1,14 @@
 package learnMongoDb.learnSpringMongoDb.controller;
 
+import learnMongoDb.learnSpringMongoDb.dto.PagedResponse;
 import learnMongoDb.learnSpringMongoDb.dto.ProductDto;
+import learnMongoDb.learnSpringMongoDb.dto.ProductSuggestionDto;
 import learnMongoDb.learnSpringMongoDb.entity.Product;
+import learnMongoDb.learnSpringMongoDb.service.ProductQueryService;
 import learnMongoDb.learnSpringMongoDb.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,7 +21,8 @@ import java.util.stream.Collectors;
 public class ProductController {
 
     private final ProductService productService;
-    private final ModelMapper modelMapper; // ── Inject ModelMapper ──
+    private final ProductQueryService productQueryService; // ── NEW ──
+    private final ModelMapper modelMapper;
 
     // ─── CREATE ────────────────────────────────────────────────────────────────
 
@@ -76,9 +81,30 @@ public class ProductController {
         return ResponseEntity.ok(mapList(productService.getProductsByBrand(brand)));
     }
 
+    // ─── NEW: Paginated Search ────────────────────────────────────────────────
     @GetMapping("/search")
-    public ResponseEntity<List<ProductDto.Response>> search(@RequestParam String keyword) {
-        return ResponseEntity.ok(mapList(productService.searchProductsByName(keyword)));
+    public ResponseEntity<PagedResponse<ProductDto.Response>> search(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        // Prevent unreasonably massive queries crashing the DB
+        if (keyword.trim().length() > 100) return ResponseEntity.badRequest().build();
+
+        Page<Product> productPage = productQueryService.search(keyword, page, size);
+
+        // Map raw Entities into the standard ProductDto.Response to ensure dynamically computed fields are populated
+        List<ProductDto.Response> dtoList = productPage.getContent().stream()
+                .map(p -> modelMapper.map(p, ProductDto.Response.class))
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(PagedResponse.of(dtoList, productPage));
+    }
+
+    // ─── NEW: Lightweight Suggestions ─────────────────────────────────────────
+    @GetMapping("/suggestions")
+    public ResponseEntity<List<ProductSuggestionDto>> suggestions(@RequestParam String q) {
+        return ResponseEntity.ok(productQueryService.suggestions(q));
     }
 
     @GetMapping("/price")
@@ -95,9 +121,7 @@ public class ProductController {
             @PathVariable String id,
             @RequestBody ProductDto.UpdateRequest request) {
 
-        // ModelMapper translates the update request into a Product entity
         Product updateData = modelMapper.map(request, Product.class);
-
         Product updated = productService.updateProduct(id, updateData);
         return ResponseEntity.ok(modelMapper.map(updated, ProductDto.Response.class));
     }

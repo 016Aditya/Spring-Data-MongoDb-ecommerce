@@ -29,13 +29,17 @@ public class User {
     @Indexed(unique = true)
     private String email;
 
-    // BCrypt hash – NEVER the raw password.
+    // BCrypt hash — NEVER the raw password.
     private String passwordHash;
 
     // 10-digit mobile number stored for password-recovery identity verification
     private String phoneNumber;
 
     private String role;
+
+    // Embedded address — stored as a sub-document inside the users collection.
+    // No separate collection needed; MongoDB handles this natively.
+    private Address address;
 
     @CreatedDate
     private Instant createdAt;

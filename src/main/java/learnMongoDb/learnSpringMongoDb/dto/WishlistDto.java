@@ -8,7 +8,6 @@ public class WishlistDto {
     private String userId;
     private List<WishlistItem> items;
 
-    // Getters and Setters
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getUserId() { return userId; }
@@ -16,21 +15,25 @@ public class WishlistDto {
     public List<WishlistItem> getItems() { return items; }
     public void setItems(List<WishlistItem> items) { this.items = items; }
 
-    // Nested class for the items
     public static class WishlistItem {
         private String productId;
-        private String name;
-        private Double price;
-        private String imageUrl; // Matches your frontend requirement
+        private String name;       // → maps to productName in frontend
+        private Double price;      // → maps to unitPrice in frontend
+        private String imageUrl;
+        private String brand;      // NEW
+        private String category;   // NEW
 
-        // Getters and Setters
-        public String getProductId() { return productId; }
-        public void setProductId(String productId) { this.productId = productId; }
-        public String getName() { return name; }
-        public void setName(String name) { this.name = name; }
-        public Double getPrice() { return price; }
-        public void setPrice(Double price) { this.price = price; }
-        public String getImageUrl() { return imageUrl; }
-        public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+        public String getProductId()           { return productId; }
+        public void   setProductId(String v)   { this.productId = v; }
+        public String getName()                { return name; }
+        public void   setName(String v)        { this.name = v; }
+        public Double getPrice()               { return price; }
+        public void   setPrice(Double v)       { this.price = v; }
+        public String getImageUrl()            { return imageUrl; }
+        public void   setImageUrl(String v)    { this.imageUrl = v; }
+        public String getBrand()               { return brand; }
+        public void   setBrand(String v)       { this.brand = v; }
+        public String getCategory()            { return category; }
+        public void   setCategory(String v)    { this.category = v; }
     }
 }

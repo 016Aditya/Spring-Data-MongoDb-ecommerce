@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * OrderDto — request / response shapes for the Orders API.
@@ -28,10 +29,25 @@ public class OrderDto {
 
         /**
          * List of product IDs to order.
-         * Quantity per product defaults to 1 unless overridden by
-         * productQuantities map (future extension).
+         * For a cart with qty>1 of the same product, the frontend now sends
+         * one productId entry + its quantity in productQuantities instead of
+         * repeating the same productId multiple times.
          */
         private List<String> productIds;
+
+        /**
+         * Quantity override per productId.
+         * Key   = productId
+         * Value = quantity ordered (must be >= 1)
+         *
+         * If a productId is not present in this map, the service defaults to 1.
+         *
+         * Example: { "abc123": 3 } orders 3 units of product abc123.
+         *
+         * The frontend (CheckoutPage.jsx) always populates this map so that
+         * cart quantities are faithfully persisted in the order snapshot.
+         */
+        private Map<String, Integer> productQuantities;
 
         private Address address;
     }

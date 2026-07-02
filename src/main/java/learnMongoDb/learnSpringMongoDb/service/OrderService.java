@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * OrderService — handles all business logic for orders.
@@ -35,30 +36,41 @@ public class OrderService {
      *
      * For each ID:
      * 1. Fetches the live Product document from MongoDB.
-     * 2. Builds an OrderItem snapshot (name, image, price — frozen at purchase time).
-     * 3. Accumulates totalPrice and totalQuantity server-side.
+     * 2. Reads the actual quantity from productQuantities map (defaults to 1
+     *    if the map is null or does not contain the productId).
+     * 3. Builds an OrderItem snapshot (name, image, price, qty — frozen at
+     *    purchase time).
+     * 4. Accumulates totalPrice and totalQuantity server-side.
      *
      * The resulting Order.items list is what the frontend renders.
      * No secondary product lookups are ever needed after this point.
      *
-     * @param productIds  IDs of products to include (one unit each by default).
-     * @param userId      Owning user's ID.
-     * @param address     Delivery address from the request.
-     * @return            Persisted Order with full item snapshots.
+     * @param productIds        IDs of products to include.
+     * @param userId            Owning user's ID.
+     * @param address           Delivery address from the request.
+     * @param productQuantities Map of productId -> quantity. May be null
+     *                          (treated as all-quantities-1 for backward compat).
+     * @return                  Persisted Order with full item snapshots.
      */
-    public Order createOrder(List<String> productIds, String userId,
-                             learnMongoDb.learnSpringMongoDb.entity.Address address) {
+    public Order createOrder(List<String> productIds,
+                             String userId,
+                             learnMongoDb.learnSpringMongoDb.entity.Address address,
+                             Map<String, Integer> productQuantities) {
 
         List<OrderItem> snapshots = new ArrayList<>();
-        double grandTotal  = 0.0;
-        int    totalQty    = 0;
+        double grandTotal = 0.0;
+        int    totalQty   = 0;
 
         for (String productId : productIds) {
             Product product = productRepository.findById(productId)
                     .orElseThrow(() -> new RuntimeException(
                             "Product not found: " + productId));
 
-            int qty          = 1;
+            // Read actual quantity from map; fall back to 1 for backward compat
+            int qty = (productQuantities != null && productQuantities.containsKey(productId))
+                    ? Math.max(1, productQuantities.get(productId))
+                    : 1;
+
             double unitPrice = product.getPrice();
             double lineTotal = unitPrice * qty;
 
