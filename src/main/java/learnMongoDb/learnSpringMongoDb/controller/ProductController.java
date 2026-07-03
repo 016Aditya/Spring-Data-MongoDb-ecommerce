@@ -1,6 +1,6 @@
 package learnMongoDb.learnSpringMongoDb.controller;
 
-import learnMongoDb.learnSpringMongoDb.dto.PagedResponse;
+import learnMongoDb.learnSpringMongoDb.dto.response.PagedResponse;
 import learnMongoDb.learnSpringMongoDb.dto.ProductDto;
 import learnMongoDb.learnSpringMongoDb.dto.ProductSuggestionDto;
 import learnMongoDb.learnSpringMongoDb.entity.Product;

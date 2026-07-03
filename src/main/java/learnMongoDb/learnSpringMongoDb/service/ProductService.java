@@ -1,6 +1,7 @@
 package learnMongoDb.learnSpringMongoDb.service;
 
 import learnMongoDb.learnSpringMongoDb.entity.Product;
+import learnMongoDb.learnSpringMongoDb.error.ResourceNotFoundException;
 import learnMongoDb.learnSpringMongoDb.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -46,10 +47,6 @@ public class ProductService {
         return productRepository.findByBrandIgnoreCase(brand);
     }
 
-    public List<Product> searchProductsByName(String keyword) {
-        return productRepository.findByNameContainingIgnoreCase(keyword);
-    }
-
     public List<Product> getProductsByPriceRange(double min, double max) {
         return productRepository.findByPriceBetween(min, max);
     }
@@ -58,7 +55,7 @@ public class ProductService {
 
     public Product updateProduct(String id, Product updatedData) {
         Product existing = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found with ID: " + id));
 
         existing.setName(updatedData.getName());
         existing.setCategory(updatedData.getCategory());
@@ -89,7 +86,7 @@ public class ProductService {
 
     public Product toggleFeatured(String id, boolean featured) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
         product.setFeatured(featured);
         return productRepository.save(product);
     }

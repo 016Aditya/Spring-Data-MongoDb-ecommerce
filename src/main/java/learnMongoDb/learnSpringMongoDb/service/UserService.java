@@ -3,7 +3,10 @@ package learnMongoDb.learnSpringMongoDb.service;
 import learnMongoDb.learnSpringMongoDb.dto.UserDto;
 import learnMongoDb.learnSpringMongoDb.entity.Address;
 import learnMongoDb.learnSpringMongoDb.entity.User;
-import learnMongoDb.learnSpringMongoDb.error.UserNotFoundException;
+import learnMongoDb.learnSpringMongoDb.error.EmailAlreadyExistsException;
+import learnMongoDb.learnSpringMongoDb.error.InvalidCredentialsException;
+import learnMongoDb.learnSpringMongoDb.error.PhoneAlreadyExistsException;
+import learnMongoDb.learnSpringMongoDb.error.ResourceNotFoundException;
 import learnMongoDb.learnSpringMongoDb.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -22,11 +25,11 @@ public class UserService {
 
     public User createUser(User user) {
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
-            throw new RuntimeException("Email already in use.");
+            throw new EmailAlreadyExistsException("Email already in use.");
         }
 
         if (userRepository.findByPhoneNumber(user.getPhoneNumber()).isPresent()) {
-            throw new RuntimeException("Phone number is already associated with another account.");
+            throw new PhoneAlreadyExistsException("Phone number is already associated with another account.");
         }
 
         user.setPasswordHash(PASSWORD_ENCODER.encode(user.getPasswordHash()));
@@ -40,10 +43,10 @@ public class UserService {
 
     public User loginUser(String email, String rawPassword) {
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("No account found with that email address."));
+                .orElseThrow(() -> new InvalidCredentialsException("Incorrect email or password."));
 
         if (!PASSWORD_ENCODER.matches(rawPassword, user.getPasswordHash())) {
-            throw new RuntimeException("Incorrect password.");
+            throw new InvalidCredentialsException("Incorrect email or password.");
         }
         return user;
     }
@@ -67,7 +70,7 @@ public class UserService {
             UserDto.AddressRequest addressReq) {
 
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new UserNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
 
         user.setFirstName(firstName);
         user.setLastName(lastName);
@@ -77,7 +80,7 @@ public class UserService {
                 !phoneNumber.equals(user.getPhoneNumber())) {
             userRepository.findByPhoneNumber(phoneNumber)
                     .ifPresent(existing -> {
-                        throw new RuntimeException("Phone number already in use.");
+                        throw new PhoneAlreadyExistsException("Phone number already in use.");
                     });
             user.setPhoneNumber(phoneNumber);
         }
@@ -123,7 +126,7 @@ public class UserService {
 
     public void resetPassword(String email, String phoneNumber, String rawNewPassword) {
         User user = userRepository.findByEmailAndPhoneNumber(email, phoneNumber)
-                .orElseThrow(() -> new RuntimeException("Identity verification failed."));
+                .orElseThrow(() -> new InvalidCredentialsException("Identity verification failed."));
 
         user.setPasswordHash(PASSWORD_ENCODER.encode(rawNewPassword));
         userRepository.save(user);

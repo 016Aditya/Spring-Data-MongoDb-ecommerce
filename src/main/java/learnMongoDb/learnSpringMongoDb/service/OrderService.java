@@ -3,6 +3,7 @@ package learnMongoDb.learnSpringMongoDb.service;
 import learnMongoDb.learnSpringMongoDb.entity.Order;
 import learnMongoDb.learnSpringMongoDb.entity.OrderItem;
 import learnMongoDb.learnSpringMongoDb.entity.Product;
+import learnMongoDb.learnSpringMongoDb.error.ResourceNotFoundException;
 import learnMongoDb.learnSpringMongoDb.repository.OrderRepository;
 import learnMongoDb.learnSpringMongoDb.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,9 +38,9 @@ public class OrderService {
      * For each ID:
      * 1. Fetches the live Product document from MongoDB.
      * 2. Reads the actual quantity from productQuantities map (defaults to 1
-     *    if the map is null or does not contain the productId).
+     * if the map is null or does not contain the productId).
      * 3. Builds an OrderItem snapshot (name, image, price, qty — frozen at
-     *    purchase time).
+     * purchase time).
      * 4. Accumulates totalPrice and totalQuantity server-side.
      *
      * The resulting Order.items list is what the frontend renders.
@@ -49,7 +50,7 @@ public class OrderService {
      * @param userId            Owning user's ID.
      * @param address           Delivery address from the request.
      * @param productQuantities Map of productId -> quantity. May be null
-     *                          (treated as all-quantities-1 for backward compat).
+     * (treated as all-quantities-1 for backward compat).
      * @return                  Persisted Order with full item snapshots.
      */
     public Order createOrder(List<String> productIds,
@@ -63,7 +64,7 @@ public class OrderService {
 
         for (String productId : productIds) {
             Product product = productRepository.findById(productId)
-                    .orElseThrow(() -> new RuntimeException(
+                    .orElseThrow(() -> new ResourceNotFoundException(
                             "Product not found: " + productId));
 
             // Read actual quantity from map; fall back to 1 for backward compat
@@ -122,7 +123,7 @@ public class OrderService {
 
     public Order getOrderById(String orderId) {
         return orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
     }
 
     // ── Mutations ──────────────────────────────────────────────────

@@ -3,9 +3,11 @@ package learnMongoDb.learnSpringMongoDb.repository;
 import learnMongoDb.learnSpringMongoDb.entity.Order;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+@Repository
 public interface OrderRepository extends MongoRepository<Order, String> {
 
     @Query("{ 'status': ?0, 'totalPrice': { $gte: ?1 } }")
@@ -20,7 +22,6 @@ public interface OrderRepository extends MongoRepository<Order, String> {
 
     /**
      * Returns true when at least one order exists for the given userId.
-     * Spring Data derives the query automatically from the method name.
      * Used by DatabaseSeeder to skip re-seeding demo orders on restart.
      */
     boolean existsByUserId(String userId);

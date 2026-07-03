@@ -1,4 +1,4 @@
-package learnMongoDb.learnSpringMongoDb.dto;
+package learnMongoDb.learnSpringMongoDb.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
