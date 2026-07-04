@@ -17,7 +17,7 @@ import java.util.NoSuchElementException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // ── Phase 1 & 2 Security Exceptions ──────────────────────────────────────
+    // ── Phase 1, 2 & 3 Security Exceptions ───────────────────────────────────
 
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex, HttpServletRequest request) {
@@ -37,27 +37,36 @@ public class GlobalExceptionHandler {
                 .success(false)
                 .code("ACCOUNT_LOCKED")
                 .message(ex.getMessage())
-                .remainingSeconds(ex.getRemainingSeconds())
+                .remainingSeconds(null)
                 .timestamp(LocalDateTime.now())
                 .path(request.getRequestURI())
                 .build();
-        // HTTP 423 Locked
-        return ResponseEntity.status(HttpStatus.LOCKED).body(response);
+        return ResponseEntity.status(HttpStatus.LOCKED).body(response); // HTTP 423
     }
 
-    // Phase 2: New Handler mapping the short exponential delay lock
     @ExceptionHandler(LoginTooSoonException.class)
     public ResponseEntity<ApiErrorResponse> handleLoginTooSoon(LoginTooSoonException ex, HttpServletRequest request) {
         ApiErrorResponse response = ApiErrorResponse.builder()
                 .success(false)
                 .code("TOO_SOON")
                 .message(ex.getMessage())
-                .remainingSeconds(ex.getRetryAfter()) // Maps retryAfter to remainingSeconds for frontend countdown
+                .remainingSeconds((int) ex.getRetryAfter())
                 .timestamp(LocalDateTime.now())
                 .path(request.getRequestURI())
                 .build();
-        // HTTP 423 Locked
-        return ResponseEntity.status(HttpStatus.LOCKED).body(response);
+        return ResponseEntity.status(HttpStatus.LOCKED).body(response); // HTTP 423
+    }
+
+    @ExceptionHandler(CaptchaRequiredException.class)
+    public ResponseEntity<ApiErrorResponse> handleCaptchaRequired(CaptchaRequiredException ex, HttpServletRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("CAPTCHA_REQUIRED")
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED).body(response); // HTTP 428
     }
 
     @ExceptionHandler(RateLimitExceededException.class)
@@ -70,8 +79,7 @@ public class GlobalExceptionHandler {
                 .timestamp(LocalDateTime.now())
                 .path(request.getRequestURI())
                 .build();
-        // HTTP 429 Too Many Requests
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response); // HTTP 429
     }
 
     // ── 409: Conflict (Duplicate Data) ───────────────────────────────────────

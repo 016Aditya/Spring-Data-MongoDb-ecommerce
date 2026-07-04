@@ -17,6 +17,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import learnMongoDb.learnSpringMongoDb.entity.Address;
 
 import java.util.Map;
 
@@ -26,7 +27,7 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
-    private final RateLimiterService rateLimiterService; // Phase 2 Injection
+    private final RateLimiterService rateLimiterService;
     private final JwtUtil jwtUtil;
     private final ModelMapper modelMapper;
 
@@ -49,17 +50,19 @@ public class UserController {
         // 1. Extract Client IP
         String ipAddress = getClientIp(httpRequest);
 
-        // 2. Phase 2: Check IP + Email Rate Limiter before touching the DB
+        // 2. Check IP + Email Rate Limiter before touching the DB
         if (!rateLimiterService.tryConsume(ipAddress, loginRequest.getEmail())) {
             throw new RateLimitExceededException("Too many login attempts. Please try again later.", 60);
         }
 
-        // 3. Authenticate and enforce security policies (Progressive delay & Hard lock checks)
+        // 3. Authenticate and enforce security policies (Progressive delay, Locks & Captcha)
         User loggedInUser = userService.loginUser(
                 loginRequest.getEmail(),
-                loginRequest.getPassword());
+                loginRequest.getPassword(),
+                loginRequest.getCaptchaToken(),
+                ipAddress);
 
-        // 4. Phase 2: On successful login, instantly clear rate limiter for this IP/Email
+        // 4. On successful login, instantly clear rate limiter for this IP/Email
         rateLimiterService.reset(ipAddress, loginRequest.getEmail());
 
         // 5. Generate JWT
@@ -103,13 +106,21 @@ public class UserController {
             return ResponseEntity.status(403).body(Map.of("error", "Forbidden"));
         }
 
+        // 1. Convert the AddressRequest DTO to an Address Entity (Null-safe)
+        Address addressEntity = null;
+        if (request.getAddress() != null) {
+            addressEntity = modelMapper.map(request.getAddress(), Address.class);
+        }
+
+        // 2. Pass the converted entity to the service
         User updatedUser = userService.updateUserProfile(
                 id,
                 request.getFirstName(),
                 request.getLastName(),
                 request.getPhoneNumber(),
                 request.getPassword(),
-                request.getAddress());
+                addressEntity // <-- Changed this from request.getAddress()
+        );
 
         return ResponseEntity.ok(toResponse(updatedUser));
     }
@@ -179,10 +190,6 @@ public class UserController {
         return request.getRemoteAddr();
     }
 
-    /**
-     * Maps a User entity to UserDto.Response and populates the convenience
-     * `fullName` field that the frontend reads directly.
-     */
     private UserDto.Response toResponse(User user) {
         UserDto.Response resp = modelMapper.map(user, UserDto.Response.class);
         resp.setFullName(toFullName(user));
@@ -204,5 +211,7 @@ public class UserController {
 
         @NotBlank(message = "Password is required")
         private String password;
+
+        private String captchaToken; // Optional because it is conditionally required
     }
 }

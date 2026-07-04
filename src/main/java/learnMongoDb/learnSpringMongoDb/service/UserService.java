@@ -1,6 +1,5 @@
 package learnMongoDb.learnSpringMongoDb.service;
 
-import learnMongoDb.learnSpringMongoDb.dto.UserDto;
 import learnMongoDb.learnSpringMongoDb.entity.Address;
 import learnMongoDb.learnSpringMongoDb.entity.User;
 import learnMongoDb.learnSpringMongoDb.error.EmailAlreadyExistsException;
@@ -9,6 +8,7 @@ import learnMongoDb.learnSpringMongoDb.error.PhoneAlreadyExistsException;
 import learnMongoDb.learnSpringMongoDb.error.ResourceNotFoundException;
 import learnMongoDb.learnSpringMongoDb.error.AccountLockedException;
 import learnMongoDb.learnSpringMongoDb.error.LoginTooSoonException;
+import learnMongoDb.learnSpringMongoDb.error.CaptchaRequiredException;
 import learnMongoDb.learnSpringMongoDb.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +30,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final MongoTemplate mongoTemplate;
+    private final TurnstileService turnstileService; // Phase 3 Injection
 
     @Value("${security.login.max-failed-attempts:5}")
     private int maxFailedAttempts;
@@ -46,6 +47,10 @@ public class UserService {
 
     @Value("${security.login.progressive-delay.max-delay-seconds:30}")
     private int maxDelaySeconds;
+
+    // --- Phase 3 Properties ---
+    @Value("${security.login.captcha.threshold:3}")
+    private int captchaThreshold;
 
     private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder(12);
     private static final String DUMMY_HASH = "$2a$12$wN1Q/Xz.iRzX0J6n.VfM.O7zX.x.x.x.x.x.x.x.x.x.x.x.x.x.x";
@@ -64,10 +69,10 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    public User loginUser(String email, String rawPassword) {
+    public User loginUser(String email, String rawPassword, String captchaToken, String clientIp) {
         User user = userRepository.findByEmail(email).orElse(null);
 
-        // 1. Constant-time execution against timing attacks (User enumeration)
+        // 1. Constant-time execution against timing attacks
         if (user == null) {
             PASSWORD_ENCODER.matches(rawPassword, DUMMY_HASH);
             throw new InvalidCredentialsException("Incorrect email or password.");
@@ -78,19 +83,26 @@ public class UserService {
             throw new AccountLockedException("Account is locked. Try again later.");
         }
 
-        // 3. Progressive delay check (Phase 2 Update)
+        // 3. Progressive delay check
         if (user.getNextLoginAllowedAt() != null && user.getNextLoginAllowedAt().isAfter(Instant.now())) {
             long retryAfter = Duration.between(Instant.now(), user.getNextLoginAllowedAt()).getSeconds();
             throw new LoginTooSoonException(retryAfter);
         }
 
-        // 4. Verify Password
+        // 4. CAPTCHA Check (Phase 3)
+        if (user.getFailedLoginAttempts() >= captchaThreshold) {
+            if (captchaToken == null || captchaToken.isBlank() || !turnstileService.verify(captchaToken, clientIp)) {
+                throw new CaptchaRequiredException("Please complete the CAPTCHA.");
+            }
+        }
+
+        // 5. Verify Password
         if (!PASSWORD_ENCODER.matches(rawPassword, user.getPasswordHash())) {
             handleFailedLogin(user);
             throw new InvalidCredentialsException("Incorrect email or password.");
         }
 
-        // 5. Successful login -> Clear locks and counters
+        // 6. Successful login -> Clear locks and counters
         resetLoginCounters(user.getId());
         return user;
     }
@@ -107,7 +119,6 @@ public class UserService {
             int attempts = updatedUser.getFailedLoginAttempts();
             Update secondaryUpdate = new Update();
 
-            // Phase 2: Always track last failed login timestamp
             secondaryUpdate.set("lastFailedLoginAt", Instant.now());
             boolean needsSecondaryUpdate = true;
 
@@ -119,12 +130,10 @@ public class UserService {
                 int lockMinutes = (newLockoutCount == 1) ? 1 : lockDurationMinutes;
                 secondaryUpdate.set("lockedUntil", Instant.now().plus(Duration.ofMinutes(lockMinutes)));
             } else if (progressiveDelayEnabled && attempts > 1) {
-                // Trigger Progressive Delay (Attempt 2=2s, 3=4s, 4=8s...)
+                // Trigger Progressive Delay
                 int delaySeconds = (int) (baseDelaySeconds * Math.pow(2, attempts - 2));
                 delaySeconds = Math.min(delaySeconds, maxDelaySeconds); // Cap at 30 seconds
                 secondaryUpdate.set("nextLoginAllowedAt", Instant.now().plusSeconds(delaySeconds));
-            } else {
-                // Just saving lastFailedLoginAt for Attempt 1
             }
 
             if (needsSecondaryUpdate) {
@@ -140,7 +149,7 @@ public class UserService {
                 .set("lockoutCount", 0)
                 .unset("lockedUntil")
                 .unset("nextLoginAllowedAt")
-                .unset("lastFailedLoginAt"); // Phase 2: Clear last failure time
+                .unset("lastFailedLoginAt");
         mongoTemplate.updateFirst(query, update, User.class);
     }
 
