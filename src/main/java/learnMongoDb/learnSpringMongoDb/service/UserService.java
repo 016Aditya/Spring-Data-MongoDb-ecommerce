@@ -37,13 +37,20 @@ public class UserService {
     @Value("${security.login.lock-duration-minutes:15}")
     private int lockDurationMinutes;
 
-    private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder(12);
+    // --- Phase 2 Properties ---
+    @Value("${security.login.progressive-delay.enabled:true}")
+    private boolean progressiveDelayEnabled;
 
-    // Formatted for BCrypt(12) so it occupies the exact same CPU time as a real check
+    @Value("${security.login.progressive-delay.base-delay-seconds:2}")
+    private int baseDelaySeconds;
+
+    @Value("${security.login.progressive-delay.max-delay-seconds:30}")
+    private int maxDelaySeconds;
+
+    private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder(12);
     private static final String DUMMY_HASH = "$2a$12$wN1Q/Xz.iRzX0J6n.VfM.O7zX.x.x.x.x.x.x.x.x.x.x.x.x.x.x";
 
     public User createUser(User user) {
-        // ... (Keep existing createUser logic exactly as is)
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
             throw new EmailAlreadyExistsException("Email already in use.");
         }
@@ -71,10 +78,10 @@ public class UserService {
             throw new AccountLockedException("Account is locked. Try again later.");
         }
 
-        // 3. Progressive delay check
+        // 3. Progressive delay check (Phase 2 Update)
         if (user.getNextLoginAllowedAt() != null && user.getNextLoginAllowedAt().isAfter(Instant.now())) {
-            long remainingSeconds = Duration.between(Instant.now(), user.getNextLoginAllowedAt()).getSeconds();
-            throw new LoginTooSoonException("Too many attempts.", remainingSeconds);
+            long retryAfter = Duration.between(Instant.now(), user.getNextLoginAllowedAt()).getSeconds();
+            throw new LoginTooSoonException(retryAfter);
         }
 
         // 4. Verify Password
@@ -99,22 +106,25 @@ public class UserService {
         if (updatedUser != null) {
             int attempts = updatedUser.getFailedLoginAttempts();
             Update secondaryUpdate = new Update();
-            boolean needsSecondaryUpdate = false;
+
+            // Phase 2: Always track last failed login timestamp
+            secondaryUpdate.set("lastFailedLoginAt", Instant.now());
+            boolean needsSecondaryUpdate = true;
 
             if (attempts >= maxFailedAttempts) {
-                // Trigger Lockout
+                // Trigger Hard Lockout
                 int newLockoutCount = updatedUser.getLockoutCount() + 1;
                 secondaryUpdate.set("lockoutCount", newLockoutCount);
 
                 int lockMinutes = (newLockoutCount == 1) ? 1 : lockDurationMinutes;
                 secondaryUpdate.set("lockedUntil", Instant.now().plus(Duration.ofMinutes(lockMinutes)));
-                needsSecondaryUpdate = true;
-            } else {
-                // Trigger Progressive Delay (2s, 4s, 8s, 16s...)
-                int delaySeconds = (int) Math.pow(2, attempts);
-                delaySeconds = Math.min(delaySeconds, 30); // Cap at 30 seconds
+            } else if (progressiveDelayEnabled && attempts > 1) {
+                // Trigger Progressive Delay (Attempt 2=2s, 3=4s, 4=8s...)
+                int delaySeconds = (int) (baseDelaySeconds * Math.pow(2, attempts - 2));
+                delaySeconds = Math.min(delaySeconds, maxDelaySeconds); // Cap at 30 seconds
                 secondaryUpdate.set("nextLoginAllowedAt", Instant.now().plusSeconds(delaySeconds));
-                needsSecondaryUpdate = true;
+            } else {
+                // Just saving lastFailedLoginAt for Attempt 1
             }
 
             if (needsSecondaryUpdate) {
@@ -129,9 +139,60 @@ public class UserService {
                 .set("failedLoginAttempts", 0)
                 .set("lockoutCount", 0)
                 .unset("lockedUntil")
-                .unset("nextLoginAllowedAt");
+                .unset("nextLoginAllowedAt")
+                .unset("lastFailedLoginAt"); // Phase 2: Clear last failure time
         mongoTemplate.updateFirst(query, update, User.class);
     }
 
-    // ... (Keep existing updateUserProfile, getUserById, deleteUser, emailExists, verifyIdentity, resetPassword)
+    // --- Profile & Account Recovery Methods ---
+    public Optional<User> getUserById(String id) {
+        return userRepository.findById(id);
+    }
+
+    public User updateUserProfile(String id, String firstName, String lastName, String phoneNumber, String password, Address address) {
+        User user = userRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        if (firstName != null && !firstName.isBlank()) user.setFirstName(firstName);
+        if (lastName != null && !lastName.isBlank()) user.setLastName(lastName);
+        if (phoneNumber != null && !phoneNumber.isBlank() && !phoneNumber.equals(user.getPhoneNumber())) {
+            if (userRepository.findByPhoneNumber(phoneNumber).isPresent()) {
+                throw new PhoneAlreadyExistsException("Phone number is already associated with another account.");
+            }
+            user.setPhoneNumber(phoneNumber);
+        }
+        if (password != null && !password.isBlank()) {
+            user.setPasswordHash(PASSWORD_ENCODER.encode(password));
+        }
+        if (address != null) user.setAddress(address);
+        return userRepository.save(user);
+    }
+
+    public void deleteUser(String id) {
+        if (!userRepository.existsById(id)) {
+            throw new ResourceNotFoundException("User not found");
+        }
+        userRepository.deleteById(id);
+    }
+
+    public void emailExists(String email) {
+        if (userRepository.findByEmail(email).isEmpty()) {
+            throw new ResourceNotFoundException("No account found with that email.");
+        }
+    }
+
+    public boolean verifyIdentity(String email, String phoneNumber) {
+        return userRepository.findByEmail(email)
+                .map(user -> user.getPhoneNumber() != null && user.getPhoneNumber().equals(phoneNumber))
+                .orElse(false);
+    }
+
+    public void resetPassword(String email, String phoneNumber, String newPassword) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("No account found with that email."));
+        if (user.getPhoneNumber() == null || !user.getPhoneNumber().equals(phoneNumber)) {
+            throw new IllegalArgumentException("The details provided do not match our records.");
+        }
+        user.setPasswordHash(PASSWORD_ENCODER.encode(newPassword));
+        resetLoginCounters(user.getId());
+        userRepository.save(user);
+    }
 }

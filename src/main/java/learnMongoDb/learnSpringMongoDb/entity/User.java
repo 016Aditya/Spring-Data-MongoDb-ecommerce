@@ -42,6 +42,9 @@ public class User {
     private Instant lockedUntil;
     private Instant nextLoginAllowedAt;
 
+    // Phase 2: Track exact time of last failure
+    private Instant lastFailedLoginAt;
+
     @CreatedDate
     private Instant createdAt;
 

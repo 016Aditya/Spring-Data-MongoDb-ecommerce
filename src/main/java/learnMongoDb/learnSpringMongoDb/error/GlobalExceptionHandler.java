@@ -17,7 +17,7 @@ import java.util.NoSuchElementException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // ── Phase 1 Security Exceptions ──────────────────────────────────────────
+    // ── Phase 1 & 2 Security Exceptions ──────────────────────────────────────
 
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex, HttpServletRequest request) {
@@ -45,13 +45,28 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.LOCKED).body(response);
     }
 
+    // Phase 2: New Handler mapping the short exponential delay lock
+    @ExceptionHandler(LoginTooSoonException.class)
+    public ResponseEntity<ApiErrorResponse> handleLoginTooSoon(LoginTooSoonException ex, HttpServletRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("TOO_SOON")
+                .message(ex.getMessage())
+                .remainingSeconds(ex.getRetryAfter()) // Maps retryAfter to remainingSeconds for frontend countdown
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+        // HTTP 423 Locked
+        return ResponseEntity.status(HttpStatus.LOCKED).body(response);
+    }
+
     @ExceptionHandler(RateLimitExceededException.class)
     public ResponseEntity<ApiErrorResponse> handleRateLimitExceeded(RateLimitExceededException ex, HttpServletRequest request) {
         ApiErrorResponse response = ApiErrorResponse.builder()
                 .success(false)
                 .code("RATE_LIMIT_EXCEEDED")
                 .message(ex.getMessage())
-                .remainingSeconds(ex.getRemainingSeconds()) // Preserved if you decide to pass remaining time to the user
+                .remainingSeconds(ex.getRemainingSeconds())
                 .timestamp(LocalDateTime.now())
                 .path(request.getRequestURI())
                 .build();
@@ -127,7 +142,6 @@ public class GlobalExceptionHandler {
                 .findFirst()
                 .orElse("Validation failed");
 
-        // Since the updated DTO drops the "errors" map, we pass the primary validation failure as the core message
         ApiErrorResponse response = ApiErrorResponse.builder()
                 .success(false)
                 .code("VALIDATION_FAILED")

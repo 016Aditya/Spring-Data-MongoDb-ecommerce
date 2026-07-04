@@ -6,8 +6,10 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import learnMongoDb.learnSpringMongoDb.dto.UserDto;
 import learnMongoDb.learnSpringMongoDb.entity.User;
+import learnMongoDb.learnSpringMongoDb.error.RateLimitExceededException;
 import learnMongoDb.learnSpringMongoDb.security.CustomUserDetails;
 import learnMongoDb.learnSpringMongoDb.security.JwtUtil;
+import learnMongoDb.learnSpringMongoDb.service.RateLimiterService;
 import learnMongoDb.learnSpringMongoDb.service.UserService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
+    private final RateLimiterService rateLimiterService; // Phase 2 Injection
     private final JwtUtil jwtUtil;
     private final ModelMapper modelMapper;
 
@@ -46,20 +49,27 @@ public class UserController {
         // 1. Extract Client IP
         String ipAddress = getClientIp(httpRequest);
 
-        // 2. Authenticate and enforce security policies
+        // 2. Phase 2: Check IP + Email Rate Limiter before touching the DB
+        if (!rateLimiterService.tryConsume(ipAddress, loginRequest.getEmail())) {
+            throw new RateLimitExceededException("Too many login attempts. Please try again later.", 60);
+        }
+
+        // 3. Authenticate and enforce security policies (Progressive delay & Hard lock checks)
         User loggedInUser = userService.loginUser(
                 loginRequest.getEmail(),
-                loginRequest.getPassword(),
-                ipAddress);
+                loginRequest.getPassword());
 
-        // 3. Generate JWT
+        // 4. Phase 2: On successful login, instantly clear rate limiter for this IP/Email
+        rateLimiterService.reset(ipAddress, loginRequest.getEmail());
+
+        // 5. Generate JWT
         String token = jwtUtil.generateToken(
                 loggedInUser.getId(),
                 loggedInUser.getEmail(),
                 loggedInUser.getRole(),
                 toFullName(loggedInUser));
 
-        // 4. Build Frontend-Compatible Response
+        // 6. Build Frontend-Compatible Response
         UserDto.LoginResponse body = new UserDto.LoginResponse();
         body.setToken(token);
         body.setUser(toResponse(loggedInUser));

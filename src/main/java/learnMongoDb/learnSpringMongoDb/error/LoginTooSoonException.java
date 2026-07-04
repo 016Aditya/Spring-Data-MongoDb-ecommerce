@@ -1,14 +1,14 @@
 package learnMongoDb.learnSpringMongoDb.error;
 
 public class LoginTooSoonException extends RuntimeException {
-    private final long remainingSeconds;
+    private final long retryAfter;
 
-    public LoginTooSoonException(String message, long remainingSeconds) {
-        super(message);
-        this.remainingSeconds = remainingSeconds;
+    public LoginTooSoonException(long retryAfter) {
+        super("Please wait before trying again.");
+        this.retryAfter = retryAfter;
     }
 
-    public long getRemainingSeconds() {
-        return remainingSeconds;
+    public long getRetryAfter() {
+        return retryAfter;
     }
 }
