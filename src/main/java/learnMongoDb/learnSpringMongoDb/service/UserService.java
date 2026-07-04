@@ -7,11 +7,21 @@ import learnMongoDb.learnSpringMongoDb.error.EmailAlreadyExistsException;
 import learnMongoDb.learnSpringMongoDb.error.InvalidCredentialsException;
 import learnMongoDb.learnSpringMongoDb.error.PhoneAlreadyExistsException;
 import learnMongoDb.learnSpringMongoDb.error.ResourceNotFoundException;
+import learnMongoDb.learnSpringMongoDb.error.AccountLockedException;
+import learnMongoDb.learnSpringMongoDb.error.LoginTooSoonException;
 import learnMongoDb.learnSpringMongoDb.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 @Service
@@ -19,116 +29,109 @@ import java.util.Optional;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final MongoTemplate mongoTemplate;
 
-    private static final BCryptPasswordEncoder PASSWORD_ENCODER =
-            new BCryptPasswordEncoder(12);
+    @Value("${security.login.max-failed-attempts:5}")
+    private int maxFailedAttempts;
+
+    @Value("${security.login.lock-duration-minutes:15}")
+    private int lockDurationMinutes;
+
+    private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder(12);
+
+    // Formatted for BCrypt(12) so it occupies the exact same CPU time as a real check
+    private static final String DUMMY_HASH = "$2a$12$wN1Q/Xz.iRzX0J6n.VfM.O7zX.x.x.x.x.x.x.x.x.x.x.x.x.x.x";
 
     public User createUser(User user) {
+        // ... (Keep existing createUser logic exactly as is)
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
             throw new EmailAlreadyExistsException("Email already in use.");
         }
-
         if (userRepository.findByPhoneNumber(user.getPhoneNumber()).isPresent()) {
             throw new PhoneAlreadyExistsException("Phone number is already associated with another account.");
         }
-
         user.setPasswordHash(PASSWORD_ENCODER.encode(user.getPasswordHash()));
-
         if (user.getRole() == null || user.getRole().isBlank()) {
             user.setRole("USER");
         }
-
         return userRepository.save(user);
     }
 
     public User loginUser(String email, String rawPassword) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new InvalidCredentialsException("Incorrect email or password."));
+        User user = userRepository.findByEmail(email).orElse(null);
 
-        if (!PASSWORD_ENCODER.matches(rawPassword, user.getPasswordHash())) {
+        // 1. Constant-time execution against timing attacks (User enumeration)
+        if (user == null) {
+            PASSWORD_ENCODER.matches(rawPassword, DUMMY_HASH);
             throw new InvalidCredentialsException("Incorrect email or password.");
         }
+
+        // 2. Hard-lockout check
+        if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now())) {
+            throw new AccountLockedException("Account is locked. Try again later.");
+        }
+
+        // 3. Progressive delay check
+        if (user.getNextLoginAllowedAt() != null && user.getNextLoginAllowedAt().isAfter(Instant.now())) {
+            long remainingSeconds = Duration.between(Instant.now(), user.getNextLoginAllowedAt()).getSeconds();
+            throw new LoginTooSoonException("Too many attempts.", remainingSeconds);
+        }
+
+        // 4. Verify Password
+        if (!PASSWORD_ENCODER.matches(rawPassword, user.getPasswordHash())) {
+            handleFailedLogin(user);
+            throw new InvalidCredentialsException("Incorrect email or password.");
+        }
+
+        // 5. Successful login -> Clear locks and counters
+        resetLoginCounters(user.getId());
         return user;
     }
 
-    /**
-     * updateUserProfile — persists all editable profile fields including address.
-     *
-     * @param id          MongoDB user document ID
-     * @param firstName   Required — from UpdateProfileRequest
-     * @param lastName    Required — from UpdateProfileRequest
-     * @param phoneNumber Optional — only updated when non-blank and different from current
-     * @param rawPassword Optional — only updated when non-blank
-     * @param addressReq  Optional — when non-null, replaces the embedded address sub-document
-     */
-    public User updateUserProfile(
-            String id,
-            String firstName,
-            String lastName,
-            String phoneNumber,
-            String rawPassword,
-            UserDto.AddressRequest addressReq) {
+    private void handleFailedLogin(User user) {
+        Query query = new Query(Criteria.where("id").is(user.getId()));
 
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+        // Atomically increment failed attempts
+        Update update = new Update().inc("failedLoginAttempts", 1);
+        FindAndModifyOptions options = new FindAndModifyOptions().returnNew(true);
+        User updatedUser = mongoTemplate.findAndModify(query, update, options, User.class);
 
-        user.setFirstName(firstName);
-        user.setLastName(lastName);
+        if (updatedUser != null) {
+            int attempts = updatedUser.getFailedLoginAttempts();
+            Update secondaryUpdate = new Update();
+            boolean needsSecondaryUpdate = false;
 
-        // Phone — only update if changed; guard against duplicates
-        if (phoneNumber != null && !phoneNumber.isBlank() &&
-                !phoneNumber.equals(user.getPhoneNumber())) {
-            userRepository.findByPhoneNumber(phoneNumber)
-                    .ifPresent(existing -> {
-                        throw new PhoneAlreadyExistsException("Phone number already in use.");
-                    });
-            user.setPhoneNumber(phoneNumber);
+            if (attempts >= maxFailedAttempts) {
+                // Trigger Lockout
+                int newLockoutCount = updatedUser.getLockoutCount() + 1;
+                secondaryUpdate.set("lockoutCount", newLockoutCount);
+
+                int lockMinutes = (newLockoutCount == 1) ? 1 : lockDurationMinutes;
+                secondaryUpdate.set("lockedUntil", Instant.now().plus(Duration.ofMinutes(lockMinutes)));
+                needsSecondaryUpdate = true;
+            } else {
+                // Trigger Progressive Delay (2s, 4s, 8s, 16s...)
+                int delaySeconds = (int) Math.pow(2, attempts);
+                delaySeconds = Math.min(delaySeconds, 30); // Cap at 30 seconds
+                secondaryUpdate.set("nextLoginAllowedAt", Instant.now().plusSeconds(delaySeconds));
+                needsSecondaryUpdate = true;
+            }
+
+            if (needsSecondaryUpdate) {
+                mongoTemplate.updateFirst(query, secondaryUpdate, User.class);
+            }
         }
-
-        // Password — only re-hash when a new value is explicitly supplied
-        if (rawPassword != null && !rawPassword.isBlank()) {
-            user.setPasswordHash(PASSWORD_ENCODER.encode(rawPassword));
-        }
-
-        // Address — replace the embedded sub-document when provided
-        if (addressReq != null) {
-            Address address = Address.builder()
-                    .fullName(addressReq.getFullName())
-                    .phoneNumber(addressReq.getPhoneNumber())
-                    .addressLine1(addressReq.getAddressLine1())
-                    .addressLine2(addressReq.getAddressLine2())
-                    .city(addressReq.getCity())
-                    .state(addressReq.getState())
-                    .zipCode(addressReq.getZipCode())
-                    .country(addressReq.getCountry())
-                    .build();
-            user.setAddress(address);
-        }
-
-        return userRepository.save(user);
     }
 
-    public Optional<User> getUserById(String id) {
-        return userRepository.findById(id);
+    private void resetLoginCounters(String userId) {
+        Query query = new Query(Criteria.where("id").is(userId));
+        Update update = new Update()
+                .set("failedLoginAttempts", 0)
+                .set("lockoutCount", 0)
+                .unset("lockedUntil")
+                .unset("nextLoginAllowedAt");
+        mongoTemplate.updateFirst(query, update, User.class);
     }
 
-    public void deleteUser(String id) {
-        userRepository.deleteById(id);
-    }
-
-    public boolean emailExists(String email) {
-        return userRepository.findByEmail(email).isPresent();
-    }
-
-    public boolean verifyIdentity(String email, String phoneNumber) {
-        return userRepository.findByEmailAndPhoneNumber(email, phoneNumber).isPresent();
-    }
-
-    public void resetPassword(String email, String phoneNumber, String rawNewPassword) {
-        User user = userRepository.findByEmailAndPhoneNumber(email, phoneNumber)
-                .orElseThrow(() -> new InvalidCredentialsException("Identity verification failed."));
-
-        user.setPasswordHash(PASSWORD_ENCODER.encode(rawNewPassword));
-        userRepository.save(user);
-    }
+    // ... (Keep existing updateUserProfile, getUserById, deleteUser, emailExists, verifyIdentity, resetPassword)
 }

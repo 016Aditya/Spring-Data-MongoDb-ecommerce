@@ -1,5 +1,6 @@
 package learnMongoDb.learnSpringMongoDb.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -39,18 +40,26 @@ public class UserController {
 
     @PostMapping("/login")
     public ResponseEntity<UserDto.LoginResponse> loginUser(
-            @Valid @RequestBody LoginRequest loginRequest) {
+            @Valid @RequestBody LoginRequest loginRequest,
+            HttpServletRequest httpRequest) {
 
+        // 1. Extract Client IP
+        String ipAddress = getClientIp(httpRequest);
+
+        // 2. Authenticate and enforce security policies
         User loggedInUser = userService.loginUser(
                 loginRequest.getEmail(),
-                loginRequest.getPassword());
+                loginRequest.getPassword(),
+                ipAddress);
 
+        // 3. Generate JWT
         String token = jwtUtil.generateToken(
                 loggedInUser.getId(),
                 loggedInUser.getEmail(),
                 loggedInUser.getRole(),
                 toFullName(loggedInUser));
 
+        // 4. Build Frontend-Compatible Response
         UserDto.LoginResponse body = new UserDto.LoginResponse();
         body.setToken(token);
         body.setUser(toResponse(loggedInUser));
@@ -90,7 +99,7 @@ public class UserController {
                 request.getLastName(),
                 request.getPhoneNumber(),
                 request.getPassword(),
-                request.getAddress());   // ← address arg wired in
+                request.getAddress());
 
         return ResponseEntity.ok(toResponse(updatedUser));
     }
@@ -151,6 +160,14 @@ public class UserController {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private String getClientIp(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
+    }
 
     /**
      * Maps a User entity to UserDto.Response and populates the convenience

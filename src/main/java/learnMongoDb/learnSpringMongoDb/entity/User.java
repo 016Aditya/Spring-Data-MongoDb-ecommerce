@@ -23,7 +23,6 @@ public class User {
     private String id;
 
     private String firstName;
-
     private String lastName;
 
     @Indexed(unique = true)
@@ -34,12 +33,14 @@ public class User {
 
     // 10-digit mobile number stored for password-recovery identity verification
     private String phoneNumber;
-
     private String role;
-
-    // Embedded address — stored as a sub-document inside the users collection.
-    // No separate collection needed; MongoDB handles this natively.
     private Address address;
+
+    // --- Security Hardening Fields ---
+    private int failedLoginAttempts;
+    private int lockoutCount;
+    private Instant lockedUntil;
+    private Instant nextLoginAllowedAt;
 
     @CreatedDate
     private Instant createdAt;

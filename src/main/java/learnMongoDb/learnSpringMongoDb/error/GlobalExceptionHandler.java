@@ -1,10 +1,7 @@
 package learnMongoDb.learnSpringMongoDb.error;
 
+import jakarta.servlet.http.HttpServletRequest;
 import learnMongoDb.learnSpringMongoDb.dto.response.ApiErrorResponse;
-import learnMongoDb.learnSpringMongoDb.error.EmailAlreadyExistsException;
-import learnMongoDb.learnSpringMongoDb.error.InvalidCredentialsException;
-import learnMongoDb.learnSpringMongoDb.error.PhoneAlreadyExistsException;
-import learnMongoDb.learnSpringMongoDb.error.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -12,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -19,51 +17,107 @@ import java.util.NoSuchElementException;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    // ── Phase 1 Security Exceptions ──────────────────────────────────────────
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex, HttpServletRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("INVALID_CREDENTIALS")
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+    }
+
+    @ExceptionHandler(AccountLockedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccountLocked(AccountLockedException ex, HttpServletRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("ACCOUNT_LOCKED")
+                .message(ex.getMessage())
+                .remainingSeconds(ex.getRemainingSeconds())
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+        // HTTP 423 Locked
+        return ResponseEntity.status(HttpStatus.LOCKED).body(response);
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleRateLimitExceeded(RateLimitExceededException ex, HttpServletRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("RATE_LIMIT_EXCEEDED")
+                .message(ex.getMessage())
+                .remainingSeconds(ex.getRemainingSeconds()) // Preserved if you decide to pass remaining time to the user
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+        // HTTP 429 Too Many Requests
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(response);
+    }
+
     // ── 409: Conflict (Duplicate Data) ───────────────────────────────────────
 
     @ExceptionHandler(EmailAlreadyExistsException.class)
-    public ResponseEntity<ApiErrorResponse> handleEmailExists(EmailAlreadyExistsException ex) {
-        ApiErrorResponse response = new ApiErrorResponse("EMAIL_ALREADY_EXISTS", ex.getMessage());
-        response.setField("email");
+    public ResponseEntity<ApiErrorResponse> handleEmailExists(EmailAlreadyExistsException ex, HttpServletRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("EMAIL_ALREADY_EXISTS")
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
 
     @ExceptionHandler(PhoneAlreadyExistsException.class)
-    public ResponseEntity<ApiErrorResponse> handlePhoneExists(PhoneAlreadyExistsException ex) {
-        ApiErrorResponse response = new ApiErrorResponse("PHONE_ALREADY_EXISTS", ex.getMessage());
-        response.setField("phoneNumber");
+    public ResponseEntity<ApiErrorResponse> handlePhoneExists(PhoneAlreadyExistsException ex, HttpServletRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("PHONE_ALREADY_EXISTS")
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
-    }
-
-    // ── 401: Unauthorized (Login Failures) ───────────────────────────────────
-
-    @ExceptionHandler(InvalidCredentialsException.class)
-    public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
-        ApiErrorResponse response = new ApiErrorResponse("INVALID_CREDENTIALS", ex.getMessage());
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
     // ── 404: Domain entity not found ─────────────────────────────────────────
 
     @ExceptionHandler({ResourceNotFoundException.class, NoSuchElementException.class})
-    public ResponseEntity<ApiErrorResponse> handleNotFound(RuntimeException ex) {
+    public ResponseEntity<ApiErrorResponse> handleNotFound(RuntimeException ex, HttpServletRequest request) {
         String message = ex.getMessage() != null ? ex.getMessage() : "Requested resource not found.";
-        ApiErrorResponse response = new ApiErrorResponse("RESOURCE_NOT_FOUND", message);
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("RESOURCE_NOT_FOUND")
+                .message(message)
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
     // ── 400: Business rule / bad input ────────────────────────────────────────
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
-        ApiErrorResponse response = new ApiErrorResponse("BAD_REQUEST", ex.getMessage());
+    public ResponseEntity<ApiErrorResponse> handleIllegalArgument(IllegalArgumentException ex, HttpServletRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("BAD_REQUEST")
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
     // ── 422: Bean Validation failures (@Valid) ────────────────────────────────
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiErrorResponse> handleValidationException(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiErrorResponse> handleValidationException(MethodArgumentNotValidException ex, HttpServletRequest request) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.putIfAbsent(fe.getField(), fe.getDefaultMessage());
@@ -73,8 +127,14 @@ public class GlobalExceptionHandler {
                 .findFirst()
                 .orElse("Validation failed");
 
-        ApiErrorResponse response = new ApiErrorResponse("VALIDATION_FAILED", firstMessage);
-        response.setErrors(fieldErrors);
+        // Since the updated DTO drops the "errors" map, we pass the primary validation failure as the core message
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("VALIDATION_FAILED")
+                .message(firstMessage)
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
 
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
     }
@@ -82,9 +142,15 @@ public class GlobalExceptionHandler {
     // ── 500: Last-resort catch-all ────────────────────────────────────────────
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception ex) {
+    public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
         ex.printStackTrace();
-        ApiErrorResponse response = new ApiErrorResponse("INTERNAL_SERVER_ERROR", "An unexpected error occurred. Please try again later.");
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("INTERNAL_SERVER_ERROR")
+                .message("An unexpected error occurred. Please try again later.")
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 }
