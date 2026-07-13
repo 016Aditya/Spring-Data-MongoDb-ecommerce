@@ -23,6 +23,20 @@ public class OrderDto {
 
     // ── Inbound ────────────────────────────────────────────────────────
 
+    /**
+     * Body for POST /api/orders/checkout — Commit 2
+     * One consolidated request per cart instead of one request per item.
+     */
+    @Data
+    public static class CheckoutRequest {
+        private String userId;
+
+        /** { "productId": quantity } for every item in the cart */
+        private Map<String, Integer> productQuantities;
+
+        private Address address;
+    }
+
     @Data
     public static class Request {
         private String userId;

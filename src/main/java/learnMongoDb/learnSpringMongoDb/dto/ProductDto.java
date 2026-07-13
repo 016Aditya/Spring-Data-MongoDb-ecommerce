@@ -52,9 +52,8 @@ public class ProductDto {
         private Integer reviewCount;
 
         /**
-         * Convenience boolean derived from stock > 0.
-         * Lets the frontend read product.inStock directly instead of
-         * doing its own stock > 0 check.
+         * Whether this product is available for purchase.
+         * Returned from Commit 2 onwards — managed by InventoryService.
          */
         private boolean inStock;
     }

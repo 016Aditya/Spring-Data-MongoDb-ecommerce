@@ -161,6 +161,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
     }
 
+    // ── 422: Order State Violations ───────────────────────────────────────────
+
+    /**
+     * 422 — Order state violations (e.g. returning a non-DELIVERED order).
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiErrorResponse> handleIllegalState(
+            IllegalStateException ex, HttpServletRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false).code("INVALID_STATE")
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI()).build();
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
+    }
+
     // ── 500: Last-resort catch-all ────────────────────────────────────────────
 
     @ExceptionHandler(Exception.class)

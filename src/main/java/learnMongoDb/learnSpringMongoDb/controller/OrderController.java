@@ -20,6 +20,7 @@ import java.util.stream.Collectors;
  *
  * Customer endpoints
  *   POST   /api/orders                          → create order
+ *   POST   /api/orders/checkout                 → two-phase checkout (atomic)
  *   GET    /api/orders/user/{userId}            → order history for a user
  *   GET    /api/orders/{orderId}                → single order detail
  *   PUT    /api/orders/{orderId}/cancel         → cancel a PENDING order
@@ -43,6 +44,23 @@ public class OrderController {
     private final ModelMapper   modelMapper;
 
     // ── CREATE ───────────────────────────────────────────────────────────────
+
+    // ── NEW: Two-phase checkout (Commit 2) ──────────────────────────────
+    /**
+     * POST /api/orders/checkout
+     * Single atomic request replaces per-item Promise.all in the frontend.
+     */
+    @PostMapping("/checkout")
+    public ResponseEntity<OrderDto.Response> checkout(
+            @RequestBody OrderDto.CheckoutRequest request) {
+
+        Order order = orderService.checkout(
+                request.getUserId(),
+                request.getAddress(),
+                request.getProductQuantities()
+        );
+        return ResponseEntity.status(HttpStatus.CREATED).body(mapToResponse(order));
+    }
 
     /**
      * POST /api/orders

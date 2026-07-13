@@ -1,252 +1,195 @@
 package learnMongoDb.learnSpringMongoDb.service;
 
-import learnMongoDb.learnSpringMongoDb.entity.Order;
-import learnMongoDb.learnSpringMongoDb.entity.OrderItem;
-import learnMongoDb.learnSpringMongoDb.entity.Product;
+import learnMongoDb.learnSpringMongoDb.entity.*;
 import learnMongoDb.learnSpringMongoDb.error.ResourceNotFoundException;
-import learnMongoDb.learnSpringMongoDb.repository.OrderRepository;
-import learnMongoDb.learnSpringMongoDb.repository.ProductRepository;
+import learnMongoDb.learnSpringMongoDb.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
- * OrderService — handles all business logic for orders.
+ * OrderService — Commit 2: orchestrator for the checkout workflow.
+ * Does NOT touch stock directly — all inventory via InventoryService.
  *
- * Core responsibility: build immutable OrderItem snapshots from live
- * Product documents so that order history is never affected by future
- * catalogue changes.
+ * Two-Phase Checkout:
+ *   Phase A — CartValidator validates ALL items (no stock changes)
+ *   Phase B — InventoryService.decreaseStockBatch → save order →
+ *             clearPurchasedCartItems
+ *   Compensation — restoreStock if Phase B fails after stock deduction
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderService {
 
-    private final OrderRepository orderRepository;
-    private final ProductRepository productRepository;
+    private final OrderRepository        orderRepository;
+    private final ProductRepository      productRepository;
+    private final ShoppingCartRepository cartRepository;
+    private final CartValidator          cartValidator;
+    private final InventoryService       inventoryService;
 
-    // ── Order creation ──────────────────────────────────────────────────
+    // ── Main checkout entry point ──────────────────────────────────────
+    public Order checkout(String userId, Address address,
+                          Map<String, Integer> productQuantities) {
 
-    /**
-     * Creates an order from a list of product IDs.
-     *
-     * For each ID:
-     * 1. Fetches the live Product document from MongoDB.
-     * 2. Reads the actual quantity from productQuantities map (defaults to 1
-     * if the map is null or does not contain the productId).
-     * 3. Builds an OrderItem snapshot (name, image, price, qty — frozen at
-     * purchase time).
-     * 4. Accumulates totalPrice and totalQuantity server-side.
-     *
-     * The resulting Order.items list is what the frontend renders.
-     * No secondary product lookups are ever needed after this point.
-     *
-     * @param productIds        IDs of products to include.
-     * @param userId            Owning user's ID.
-     * @param address           Delivery address from the request.
-     * @param productQuantities Map of productId -> quantity. May be null
-     * (treated as all-quantities-1 for backward compat).
-     * @return                  Persisted Order with full item snapshots.
-     */
-    public Order createOrder(List<String> productIds,
-                             String userId,
-                             learnMongoDb.learnSpringMongoDb.entity.Address address,
-                             Map<String, Integer> productQuantities) {
-
-        List<OrderItem> snapshots = new ArrayList<>();
-        double grandTotal = 0.0;
-        int    totalQty   = 0;
-
-        for (String productId : productIds) {
-            Product product = productRepository.findById(productId)
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Product not found: " + productId));
-
-            // Read actual quantity from map; fall back to 1 for backward compat
-            int qty = (productQuantities != null && productQuantities.containsKey(productId))
-                    ? Math.max(1, productQuantities.get(productId))
-                    : 1;
-
-            double unitPrice = product.getPrice();
-            double lineTotal = unitPrice * qty;
-
-            OrderItem snapshot = OrderItem.builder()
-                    .productId(product.getId())
-                    .productName(product.getName())
-                    .productImage(product.getImageUrl())
-                    .price(unitPrice)
-                    .quantity(qty)
-                    .totalPrice(lineTotal)
-                    .build();
-
-            log.debug("Snapshot built — product='{}' image='{}' price={} qty={}",
-                    product.getName(), product.getImageUrl(), unitPrice, qty);
-
-            snapshots.add(snapshot);
-            grandTotal += lineTotal;
-            totalQty   += qty;
+        // PHASE A — validate ALL items, zero stock changes
+        log.info("Phase A: validating {} cart items for userId={}",
+                productQuantities.size(), userId);
+        for (Map.Entry<String, Integer> entry : productQuantities.entrySet()) {
+            cartValidator.validateAndGet(entry.getKey(), entry.getValue());
         }
+        log.info("Phase A passed — entering Phase B for userId={}", userId);
 
-        Order order = Order.builder()
-                .userId(userId)
-                .address(address)
-                .items(snapshots)
-                .quantity(totalQty)
-                .totalPrice(grandTotal)
-                .status("PENDING")
-                .build();
+        // PHASE B — deduct + save + clear cart
+        Map<String, Integer> previousStocks = null;
+        try {
+            previousStocks = inventoryService.decreaseStockBatch(productQuantities);
 
-        Order saved = orderRepository.save(order);
-        log.info("Order created — id={} userId={} items={} total={}",
-                saved.getId(), userId, snapshots.size(), grandTotal);
-        return saved;
+            List<OrderItem> snapshots = buildSnapshots(productQuantities);
+            double grandTotal = snapshots.stream()
+                    .mapToDouble(OrderItem::getTotalPrice).sum();
+            int totalQty = snapshots.stream()
+                    .mapToInt(OrderItem::getQuantity).sum();
+
+            Order order = Order.builder()
+                    .userId(userId).address(address).items(snapshots)
+                    .quantity(totalQty).totalPrice(grandTotal)
+                    .status("PENDING").build();
+
+            Order saved = orderRepository.save(order);
+            log.info("Order saved — id={} userId={} items={} total={}",
+                    saved.getId(), userId, snapshots.size(), grandTotal);
+
+            clearPurchasedCartItems(userId, productQuantities.keySet());
+            return saved;
+
+        } catch (Exception ex) {
+            // Compensation: restore stock if anything in Phase B fails
+            if (previousStocks != null) {
+                log.error("Phase B failed — restoring stock. Reason: {}", ex.getMessage());
+                inventoryService.restoreStock(previousStocks);
+            }
+            throw ex;
+        }
     }
 
-    // ── Queries ──────────────────────────────────────────────────────
+    // ── Backward-compat createOrder (delegates to checkout) ───────────
+    public Order createOrder(List<String> productIds, String userId,
+                             Address address, Map<String, Integer> productQuantities) {
+        Map<String, Integer> quantities = new HashMap<>();
+        for (String productId : productIds) {
+            quantities.put(productId,
+                    (productQuantities != null && productQuantities.containsKey(productId))
+                            ? Math.max(1, productQuantities.get(productId)) : 1);
+        }
+        return checkout(userId, address, quantities);
+    }
 
+    // ── Queries (unchanged) ────────────────────────────────────────────
     public List<Order> getOrdersByUserId(String userId) {
         return orderRepository.findByUserId(userId);
     }
-
     public List<Order> getOrdersByStatusAndPrice(String status, double minPrice) {
         return orderRepository.findOrdersByStatusAndPrice(status, minPrice);
     }
-
     public List<Order> getOrdersByCity(String city) {
         return orderRepository.findByAddressCity(city);
     }
-
     public Order getOrderById(String orderId) {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
     }
 
-    // ── Mutations ──────────────────────────────────────────────────
-
+    // ── Mutations (unchanged) ──────────────────────────────────────────
     public Order updateOrderStatus(String orderId, String newStatus) {
         Order order = getOrderById(orderId);
         order.setStatus(newStatus);
-        Order saved = orderRepository.save(order);
-        log.info("Order {} status updated to {}", orderId, newStatus);
-        return saved;
+        return orderRepository.save(order);
     }
 
-    /**
-     * Customer initiates a return for a delivered order.
-     *
-     * Business rule: only DELIVERED orders can be returned.
-     *
-     * Sets:
-     * status            → RETURN_REQUESTED
-     * returnRequestedAt → now()
-     * refundStatus      → "PENDING"
-     *
-     * @param orderId  The order to return.
-     * @param reason   Customer-supplied return reason (may be empty string).
-     * @return         Updated order with return fields populated.
-     */
     public Order returnOrder(String orderId, String reason) {
         Order order = getOrderById(orderId);
-
-        String currentStatus = order.getStatus();
-        if (!"DELIVERED".equalsIgnoreCase(currentStatus)) {
+        if (!"DELIVERED".equalsIgnoreCase(order.getStatus()))
             throw new IllegalStateException(
-                    "Only DELIVERED orders can be returned. Current status: " + currentStatus);
-        }
-
+                    "Only DELIVERED orders can be returned. Current: " + order.getStatus());
         order.setStatus("RETURN_REQUESTED");
         order.setReturnRequestedAt(LocalDateTime.now());
         order.setRefundStatus("PENDING");
-
-        Order saved = orderRepository.save(order);
-        log.info("Return requested — orderId={} reason='{}'", orderId, reason);
-        return saved;
+        return orderRepository.save(order);
     }
 
-    // ── Admin / system return lifecycle methods ────────────────────────────
-
-    /**
-     * Admin: approve the return request.
-     * Transitions: RETURN_REQUESTED → RETURN_APPROVED
-     */
     public Order approveReturn(String orderId) {
         return transitionReturnStatus(orderId, "RETURN_REQUESTED", "RETURN_APPROVED");
     }
-
-    /**
-     * Admin: schedule pickup for the returned item.
-     * Transitions: RETURN_APPROVED → PICKUP_SCHEDULED
-     */
     public Order schedulePickup(String orderId) {
         return transitionReturnStatus(orderId, "RETURN_APPROVED", "PICKUP_SCHEDULED");
     }
-
-    /**
-     * Admin: mark item as picked up from the customer.
-     * Transitions: PICKUP_SCHEDULED → PICKED_UP
-     */
     public Order markPickedUp(String orderId) {
         return transitionReturnStatus(orderId, "PICKUP_SCHEDULED", "PICKED_UP");
     }
-
-    /**
-     * Admin: mark refund as processed.
-     * Transitions: PICKED_UP → REFUND_PROCESSED
-     * Also sets refundStatus = "PROCESSED".
-     */
     public Order processRefund(String orderId) {
         Order order = getOrderById(orderId);
-        if (!"PICKED_UP".equalsIgnoreCase(order.getStatus())) {
-            throw new IllegalStateException(
-                    "Expected PICKED_UP but found: " + order.getStatus());
-        }
+        if (!"PICKED_UP".equalsIgnoreCase(order.getStatus()))
+            throw new IllegalStateException("Expected PICKED_UP but found: " + order.getStatus());
         order.setStatus("REFUND_PROCESSED");
         order.setRefundStatus("PROCESSED");
-        Order saved = orderRepository.save(order);
-        log.info("Refund processed — orderId={}", orderId);
-        return saved;
+        return orderRepository.save(order);
     }
-
-    /**
-     * Admin: complete the return lifecycle.
-     * Transitions: REFUND_PROCESSED → RETURN_SUCCESSFUL
-     * Also sets returnCompletedAt = now().
-     */
     public Order completeReturn(String orderId) {
         Order order = getOrderById(orderId);
-        if (!"REFUND_PROCESSED".equalsIgnoreCase(order.getStatus())) {
-            throw new IllegalStateException(
-                    "Expected REFUND_PROCESSED but found: " + order.getStatus());
-        }
+        if (!"REFUND_PROCESSED".equalsIgnoreCase(order.getStatus()))
+            throw new IllegalStateException("Expected REFUND_PROCESSED but found: " + order.getStatus());
         order.setStatus("RETURN_SUCCESSFUL");
         order.setReturnCompletedAt(LocalDateTime.now());
-        Order saved = orderRepository.save(order);
-        log.info("Return completed — orderId={}", orderId);
-        return saved;
+        return orderRepository.save(order);
     }
-
-    /** Permanently removes the order document. Use with caution. */
     public void deleteOrder(String id) {
         orderRepository.deleteById(id);
-        log.warn("Order {} permanently deleted", id);
     }
 
-    // ── Private helpers ───────────────────────────────────────────────
+    // ── Private helpers ────────────────────────────────────────────────
+    private List<OrderItem> buildSnapshots(Map<String, Integer> productQuantities) {
+        List<OrderItem> snapshots = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : productQuantities.entrySet()) {
+            Product product = productRepository.findById(entry.getKey())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Product not found during snapshot: " + entry.getKey()));
+            double unitPrice = product.getPrice();
+            snapshots.add(OrderItem.builder()
+                    .productId(product.getId())
+                    .productName(product.getName())
+                    .productImage(product.getImageUrl())
+                    .price(unitPrice).quantity(entry.getValue())
+                    .totalPrice(unitPrice * entry.getValue()).build());
+        }
+        return snapshots;
+    }
 
-    private Order transitionReturnStatus(String orderId, String expectedCurrent, String next) {
+    private void clearPurchasedCartItems(String userId,
+                                         Set<String> purchasedProductIds) {
+        cartRepository.findByUserId(userId).ifPresent(cart -> {
+            if (cart.getItems() == null) return;
+            boolean anyRemoved = cart.getItems()
+                    .removeIf(item -> purchasedProductIds.contains(item.getProductId()));
+            if (anyRemoved) {
+                double newTotal = cart.getItems().stream()
+                        .mapToDouble(i -> i.getUnitPrice() * i.getQuantity()).sum();
+                cart.setCartTotal(newTotal);
+                cartRepository.save(cart);
+            }
+        });
+    }
+
+    private Order transitionReturnStatus(String orderId,
+                                         String expectedCurrent, String next) {
         Order order = getOrderById(orderId);
-        if (!expectedCurrent.equalsIgnoreCase(order.getStatus())) {
+        if (!expectedCurrent.equalsIgnoreCase(order.getStatus()))
             throw new IllegalStateException(
                     "Expected " + expectedCurrent + " but found: " + order.getStatus());
-        }
         order.setStatus(next);
-        Order saved = orderRepository.save(order);
-        log.info("Return status transition — orderId={} {} → {}", orderId, expectedCurrent, next);
-        return saved;
+        return orderRepository.save(order);
     }
 }

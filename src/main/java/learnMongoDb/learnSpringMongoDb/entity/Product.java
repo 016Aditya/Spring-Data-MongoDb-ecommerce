@@ -47,6 +47,16 @@ public class Product {
 
     private int stock;
 
+    /**
+     * Whether this product is available for purchase.
+     * Managed exclusively by InventoryService:
+     *   stock == 0  →  inStock = false
+     *   stock > 0   →  inStock = true
+     * Never set this manually.
+     */
+    @Builder.Default
+    private boolean inStock = true;
+
     private String imageUrl;
 
     private String description;
