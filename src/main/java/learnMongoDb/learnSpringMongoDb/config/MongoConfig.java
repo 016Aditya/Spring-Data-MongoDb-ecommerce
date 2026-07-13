@@ -17,13 +17,11 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
 
     @Override
     public MongoClient mongoClient() {
-        // This forces Spring to use these exact credentials, bypassing all properties files
         return MongoClients.create("mongodb://admin:password@localhost:27017/ecommerce_db?authSource=admin");
     }
 
     @Override
     protected boolean autoIndexCreation() {
-        // This replaces the spring.data.mongodb.auto-index-creation=true property
         return true;
     }
 }

@@ -23,25 +23,6 @@ import java.util.Map;
  * SecurityConfig
  *
  * JWT-based stateless security configuration.
- *
- * HTTP status contract:
- *   401 Unauthorized  — no token, or token is invalid/expired.
- *   403 Forbidden     — valid token, but user’s role lacks permission.
- *
- * Public endpoints (no token required):
- *   POST /api/users/register
- *   POST /api/users/login
- *   POST /api/users/forgot-password
- *   POST /api/users/verify-identity
- *   POST /api/users/reset-password
- *   GET  /api/products/**          (guest browsing)
- *   GET  /api/reviews/**           (guest reading)
- *   POST /api/reviews/search       (guest filtering)
- *
- * All other endpoints, including ALL /api/cart/** routes, require a valid
- * Bearer JWT. Cart is server-side state tied to a userId from the JWT;
- * allowing unauthenticated GET would cause a NullPointerException when
- * the controller calls principal.getUserId() on a null principal.
  */
 @Configuration
 @EnableWebSecurity
@@ -50,11 +31,6 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
 
-    /**
-     * AuthenticationEntryPoint — invoked when a protected endpoint is reached
-     * with NO authentication principal (token entirely missing).
-     * Returns 401 + JSON.
-     */
     @Bean
     public AuthenticationEntryPoint unauthorizedEntryPoint() {
         return (request, response, authException) -> {
@@ -66,11 +42,6 @@ public class SecurityConfig {
         };
     }
 
-    /**
-     * AccessDeniedHandler — invoked when an authenticated user’s role does not
-     * meet the endpoint’s authorization requirement.
-     * Returns 403 + JSON.
-     */
     @Bean
     public AccessDeniedHandler accessDeniedHandler() {
         return (request, response, accessDeniedException) -> {
@@ -108,7 +79,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,  "/api/reviews/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/reviews/search").permitAll()
 
-                        // Everything else (including ALL /api/cart/**) requires a valid JWT
+                        // Addresses — authenticated only
+                        .requestMatchers("/api/v1/addresses/**").authenticated()
+
+                        // Everything else requires a valid JWT
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

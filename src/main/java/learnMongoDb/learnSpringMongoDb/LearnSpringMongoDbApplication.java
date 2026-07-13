@@ -6,8 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class LearnSpringMongoDbApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(LearnSpringMongoDbApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(LearnSpringMongoDbApplication.class, args);
+    }
 }
