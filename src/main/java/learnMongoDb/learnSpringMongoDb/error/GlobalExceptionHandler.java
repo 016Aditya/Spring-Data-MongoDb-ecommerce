@@ -108,6 +108,25 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
     }
 
+    // ── 409: Inventory Concurrency / Conflict ────────────────────────────────
+
+    /**
+     * 409 — Triggered during checkout Phase B if another transaction
+     * modifies the stock before this one completes (Optimistic Locking failure).
+     */
+    @ExceptionHandler(learnMongoDb.learnSpringMongoDb.exception.InventoryConflictException.class)
+    public ResponseEntity<ApiErrorResponse> handleInventoryConflict(
+            learnMongoDb.learnSpringMongoDb.exception.InventoryConflictException ex, HttpServletRequest request) {
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("INVENTORY_CONFLICT")
+                .message(ex.getMessage())
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
     // ── 404: Domain entity not found ─────────────────────────────────────────
 
     @ExceptionHandler({ResourceNotFoundException.class, NoSuchElementException.class})
@@ -154,6 +173,39 @@ public class GlobalExceptionHandler {
                 .success(false)
                 .code("VALIDATION_FAILED")
                 .message(firstMessage)
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
+    }
+
+    // ── 422: Inventory & Cart Limits ──────────────────────────────────────────
+
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ApiErrorResponse> handleInsufficientStock(
+            InsufficientStockException ex, HttpServletRequest request) {
+
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("INSUFFICIENT_STOCK")
+                .message(ex.getMessage())
+                .availableStock(ex.getAvailableStock())
+                .timestamp(LocalDateTime.now())
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(response);
+    }
+
+    @ExceptionHandler(MaxQuantityExceededException.class)
+    public ResponseEntity<ApiErrorResponse> handleMaxQuantityExceeded(
+            MaxQuantityExceededException ex, HttpServletRequest request) {
+
+        ApiErrorResponse response = ApiErrorResponse.builder()
+                .success(false)
+                .code("MAX_QUANTITY_EXCEEDED")
+                .message(ex.getMessage())
                 .timestamp(LocalDateTime.now())
                 .path(request.getRequestURI())
                 .build();

@@ -1,20 +1,29 @@
 package learnMongoDb.learnSpringMongoDb.service;
 
 import learnMongoDb.learnSpringMongoDb.entity.Product;
-import learnMongoDb.learnSpringMongoDb.error.InsufficientStockException;
 import learnMongoDb.learnSpringMongoDb.error.ResourceNotFoundException;
+import learnMongoDb.learnSpringMongoDb.exception.InventoryConflictException;
 import learnMongoDb.learnSpringMongoDb.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * InventoryService — Commit 2
- * Sole owner of all inventory mutation logic.
- * OrderService MUST delegate all stock changes here.
+ * InventoryService — Commit 3: Production Hardening
+ *
+ * Sole owner of ALL inventory mutations. Replaces the Commit 2
+ * read-modify-write pattern with a single atomic MongoDB
+ * findAndModify operation guarded by a conditional filter.
  */
 @Slf4j
 @Service
@@ -22,83 +31,93 @@ import java.util.Map;
 public class InventoryService {
 
     private final ProductRepository productRepository;
+    private final MongoTemplate     mongoTemplate;
 
-    // ── Decrease stock (single item) ──────────────────────────────────
-    public Product decreaseStock(String productId, int quantity) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Product not found during stock deduction: " + productId));
+    public Product atomicDecreaseStock(String productId, int quantity) {
+        Query query = new Query(
+                Criteria.where("_id").is(productId)
+                        .and("stock").gte(quantity)
+        );
+        Update update = new Update().inc("stock", -quantity);
+        FindAndModifyOptions options = FindAndModifyOptions.options().returnNew(true);
+        Product updated = mongoTemplate.findAndModify(query, update, options, Product.class);
 
-        int currentStock = product.getStock();
-        int newStock     = currentStock - quantity;
-
-        if (newStock < 0) {
-            throw new InsufficientStockException(currentStock, quantity);
+        if (updated == null) {
+            log.warn("Atomic stock deduction FAILED — productId={} requested={}", productId, quantity);
+            throw new InventoryConflictException(productId);
         }
 
-        product.setStock(newStock);
-        product.setInStock(newStock > 0);
+        updateAvailability(productId, updated.getStock());
+        updated.setInStock(updated.getStock() > 0);
 
-        Product saved = productRepository.save(product);
-        log.info("Stock decreased — productId={} prev={} deducted={} new={} inStock={}",
-                productId, currentStock, quantity, newStock, saved.isInStock());
-        return saved;
+        log.info("Atomic stock deduction SUCCESS — productId={} -{} → stock={}",
+                productId, quantity, updated.getStock());
+        return updated;
     }
 
-    // ── Decrease stock (batch) — returns snapshot for compensation ────
-    public Map<String, Integer> decreaseStockBatch(Map<String, Integer> quantities) {
-        Map<String, Integer> previousStocks = new HashMap<>();
+    public Product atomicIncreaseStock(String productId, int quantity) {
+        Query query = new Query(Criteria.where("_id").is(productId));
+        Update update = new Update().inc("stock", quantity);
+        FindAndModifyOptions options = FindAndModifyOptions.options().returnNew(true);
+        Product updated = mongoTemplate.findAndModify(query, update, options, Product.class);
 
-        for (Map.Entry<String, Integer> entry : quantities.entrySet()) {
-            String productId = entry.getKey();
-            int    qty       = entry.getValue();
+        if (updated == null) {
+            throw new ResourceNotFoundException("Product not found during rollback: " + productId);
+        }
 
-            Product product = productRepository.findById(productId)
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Product not found: " + productId));
+        updateAvailability(productId, updated.getStock());
+        updated.setInStock(updated.getStock() > 0);
 
-            previousStocks.put(productId, product.getStock());
+        log.info("Atomic stock increase (rollback) — productId={} +{} → stock={}",
+                productId, quantity, updated.getStock());
+        return updated;
+    }
 
-            int newStock = product.getStock() - qty;
-            if (newStock < 0) {
-                throw new InsufficientStockException(product.getStock(), qty);
+    private void updateAvailability(String productId, int currentStock) {
+        Query query = new Query(Criteria.where("_id").is(productId));
+        Update update = new Update().set("inStock", currentStock > 0);
+        mongoTemplate.updateFirst(query, update, Product.class);
+    }
+
+    public Map<String, Integer> atomicDecreaseStockBatch(Map<String, Integer> productQuantities) {
+        Deque<Map.Entry<String, Integer>> succeeded = new ArrayDeque<>();
+        Map<String, Integer> deductedAmounts = new LinkedHashMap<>();
+
+        try {
+            for (Map.Entry<String, Integer> entry : productQuantities.entrySet()) {
+                String productId = entry.getKey();
+                int    quantity  = entry.getValue();
+                atomicDecreaseStock(productId, quantity);
+                succeeded.push(entry);
+                deductedAmounts.put(productId, quantity);
             }
+            log.info("Atomic batch deduction SUCCESS for all {} item(s)", productQuantities.size());
+            return deductedAmounts;
 
-            product.setStock(newStock);
-            product.setInStock(newStock > 0);
-            productRepository.save(product);
-
-            log.info("Batch stock decrease — productId={} -{} → stock={}",
-                    productId, qty, newStock);
-        }
-
-        return previousStocks;
-    }
-
-    // ── Compensation: restore stock on order save failure ─────────────
-    public void restoreStock(Map<String, Integer> previousStocks) {
-        for (Map.Entry<String, Integer> entry : previousStocks.entrySet()) {
-            String productId     = entry.getKey();
-            int    restoreAmount = entry.getValue();
-
-            productRepository.findById(productId).ifPresent(product -> {
-                product.setStock(restoreAmount);
-                product.setInStock(restoreAmount > 0);
-                productRepository.save(product);
-                log.warn("Stock restored (compensation) — productId={} restoredTo={}",
-                        productId, restoreAmount);
-            });
+        } catch (InventoryConflictException ex) {
+            log.error("Atomic batch deduction FAILED at productId={} — rolling back {} prior success(es)",
+                    ex.getProductId(), succeeded.size());
+            while (!succeeded.isEmpty()) {
+                Map.Entry<String, Integer> entry = succeeded.pop();
+                try {
+                    atomicIncreaseStock(entry.getKey(), entry.getValue());
+                } catch (Exception rollbackEx) {
+                    log.error("CRITICAL: rollback failed for productId={} amount={} — {}",
+                            entry.getKey(), entry.getValue(), rollbackEx.getMessage());
+                }
+            }
+            throw ex;
         }
     }
 
-    // ── Future hooks (Commit 3+) ───────────────────────────────────────
-    public Product increaseStock(String productId, int quantity) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Product not found: " + productId));
-        int newStock = product.getStock() + quantity;
-        product.setStock(newStock);
-        product.setInStock(true);
-        return productRepository.save(product);
+    public void rollbackBatch(Map<String, Integer> deductedAmounts) {
+        for (Map.Entry<String, Integer> entry : deductedAmounts.entrySet()) {
+            try {
+                atomicIncreaseStock(entry.getKey(), entry.getValue());
+            } catch (Exception ex) {
+                log.error("CRITICAL: post-order-failure rollback failed for productId={} — {}",
+                        entry.getKey(), ex.getMessage());
+            }
+        }
     }
 }

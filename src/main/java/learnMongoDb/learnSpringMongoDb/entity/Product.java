@@ -57,6 +57,13 @@ public class Product {
     @Builder.Default
     private boolean inStock = true;
 
+    /**
+     * Maximum number of units a single user can buy in one order.
+     * Defaults to 10 if not explicitly set.
+     */
+    @Builder.Default
+    private int maxOrderQuantity = 10;
+
     private String imageUrl;
 
     private String description;
