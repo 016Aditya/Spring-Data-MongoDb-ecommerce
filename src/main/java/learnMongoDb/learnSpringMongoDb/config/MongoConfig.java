@@ -2,6 +2,7 @@ package learnMongoDb.learnSpringMongoDb.config;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
@@ -10,6 +11,9 @@ import org.springframework.data.mongodb.config.EnableMongoAuditing;
 @EnableMongoAuditing
 public class MongoConfig extends AbstractMongoClientConfiguration {
 
+    @Value("${spring.data.mongodb.uri}")
+    private String mongoUri;
+
     @Override
     protected String getDatabaseName() {
         return "ecommerce_db";
@@ -17,7 +21,7 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
 
     @Override
     public MongoClient mongoClient() {
-        return MongoClients.create("mongodb://admin:password@localhost:27017/ecommerce_db?authSource=admin");
+        return MongoClients.create(mongoUri);
     }
 
     @Override
