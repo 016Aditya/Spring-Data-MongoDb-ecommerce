@@ -18,7 +18,8 @@ public class CorsConfig {
         // ── Allowed origins (add production URL here when deploying) ────────────
         config.setAllowedOrigins(List.of(
                 "http://localhost:5173",   // Vite dev server
-                "http://localhost:4173"    // Vite preview
+                "http://localhost:4173",  //vite preview
+                "https://ecommerce-frontend-reactjs.pages.dev/"     //production app
         ));
 
         // ── Methods ─────────────────────────────────────────────────────────────
