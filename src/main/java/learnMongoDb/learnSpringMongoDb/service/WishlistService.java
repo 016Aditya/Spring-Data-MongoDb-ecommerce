@@ -1,6 +1,7 @@
 package learnMongoDb.learnSpringMongoDb.service;
 
 import learnMongoDb.learnSpringMongoDb.dto.WishlistDto;
+import learnMongoDb.learnSpringMongoDb.dto.WishlistSyncRequest;
 import learnMongoDb.learnSpringMongoDb.entity.Product;
 import learnMongoDb.learnSpringMongoDb.entity.Wishlist;
 import learnMongoDb.learnSpringMongoDb.repository.ProductRepository;
@@ -49,6 +50,44 @@ public class WishlistService {
         });
     }
 
+    /**
+     * syncGuestWishlist
+     *
+     * Merges a list of product IDs (saved by the frontend in LocalStorage
+     * while the user browsed as a guest) into the authenticated user's
+     * MongoDB wishlist in a single operation.
+     *
+     * Duplicate product IDs are silently skipped — the operation is
+     * idempotent and safe to retry on network failure.
+     *
+     * Called via: POST /api/wishlist/user/{userId}/sync
+     *
+     * @param userId     The authenticated user's ID (from the URL path)
+     * @param request    DTO containing the list of guest product IDs
+     * @return           The updated WishlistDto (same shape as other endpoints)
+     */
+    public WishlistDto syncGuestWishlist(String userId, WishlistSyncRequest request) {
+        if (request == null || request.getProductIds() == null || request.getProductIds().isEmpty()) {
+            return toDto(getOrCreate(userId));
+        }
+
+        Wishlist w = getOrCreate(userId);
+        boolean modified = false;
+
+        for (String productId : request.getProductIds()) {
+            if (productId != null && !productId.isBlank() && !w.getProductIds().contains(productId)) {
+                w.getProductIds().add(productId);
+                modified = true;
+            }
+        }
+
+        if (modified) {
+            wishlistRepository.save(w);
+        }
+
+        return toDto(w);
+    }
+
     private WishlistDto toDto(Wishlist wishlist) {
         WishlistDto dto = new WishlistDto();
         dto.setId(wishlist.getId());
@@ -63,8 +102,8 @@ public class WishlistService {
             item.setName(p.getName());
             item.setPrice(p.getPrice());
             item.setImageUrl(p.getImageUrl());
-            item.setBrand(p.getBrand());       // NEW
-            item.setCategory(p.getCategory()); // NEW
+            item.setBrand(p.getBrand());
+            item.setCategory(p.getCategory());
             return item;
         }).collect(Collectors.toList());
 

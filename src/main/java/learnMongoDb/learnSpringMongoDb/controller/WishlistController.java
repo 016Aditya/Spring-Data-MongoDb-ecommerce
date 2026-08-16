@@ -1,6 +1,7 @@
 package learnMongoDb.learnSpringMongoDb.controller;
 
 import learnMongoDb.learnSpringMongoDb.dto.WishlistDto;
+import learnMongoDb.learnSpringMongoDb.dto.WishlistSyncRequest;
 import learnMongoDb.learnSpringMongoDb.service.WishlistService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -36,5 +37,24 @@ public class WishlistController {
     public ResponseEntity<Void> clearWishlist(@PathVariable String userId) {
         wishlistService.clearWishlist(userId);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Bulk sync endpoint — merges guest LocalStorage wishlist into MongoDB.
+     *
+     * POST /api/wishlist/user/{userId}/sync
+     *
+     * Called once after login/registration if the user had saved items as a
+     * guest. Skips any product IDs already present in the wishlist.
+     * Returns the complete updated wishlist so the frontend can refresh
+     * its TanStack Query cache in a single round-trip.
+     *
+     * Request body: { "productIds": ["id1", "id2", ...] }
+     */
+    @PostMapping("/user/{userId}/sync")
+    public ResponseEntity<WishlistDto> syncGuestWishlist(
+            @PathVariable String userId,
+            @RequestBody WishlistSyncRequest request) {
+        return ResponseEntity.ok(wishlistService.syncGuestWishlist(userId, request));
     }
 }
