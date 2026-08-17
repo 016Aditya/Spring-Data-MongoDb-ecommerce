@@ -29,8 +29,8 @@ public class JwtUtil {
     private final long expirationMs;
 
     public JwtUtil(
-            @Value("${JWT_SECRET:my-super-secret-key-for-dev-only-change-in-prod}") String secret,
-            @Value("${JWT_EXPIRATION_MS:604800000}") long expirationMs) {
+            @Value("${jwt.secret}") String secret,
+            @Value("${jwt.expiration-ms}") long expirationMs) {
 
         this.signingKey = Keys.hmacShaKeyFor(
                 secret.getBytes(StandardCharsets.UTF_8)
@@ -76,7 +76,8 @@ public class JwtUtil {
      *
      * @param token compact JWT string without "Bearer " prefix
      * @return parsed JWT claims
-     * @throws JwtException if token is malformed, expired, or signature is invalid
+     * @throws JwtException if token is malformed, expired,
+     *                      or the signature is invalid
      */
     public Claims validateAndExtractClaims(String token) {
         return Jwts.parser()
