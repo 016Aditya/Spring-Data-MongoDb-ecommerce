@@ -17,13 +17,10 @@ import java.util.Date;
  * Handles JWT creation and validation.
  *
  * Token claims:
- *   sub      — MongoDB userId (the _id field of the User document)
+ *   sub      — MongoDB userId
  *   email    — user's email address
  *   role     — user's role (USER / ADMIN)
- *   fullName — firstName + " " + lastName (used by ReviewController to set userName)
- *
- * The secret is injected from application.properties (jwt.secret).
- * Minimum recommended secret length: 32 characters.
+ *   fullName — firstName + " " + lastName
  */
 @Component
 public class JwtUtil {
@@ -32,9 +29,13 @@ public class JwtUtil {
     private final long expirationMs;
 
     public JwtUtil(
-            @Value("${jwt.secret}") String secret,
-            @Value("${jwt.expiration-ms:86400000}") long expirationMs) {
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+            @Value("${JWT_SECRET:my-super-secret-key-for-dev-only-change-in-prod}") String secret,
+            @Value("${JWT_EXPIRATION_MS:604800000}") long expirationMs) {
+
+        this.signingKey = Keys.hmacShaKeyFor(
+                secret.getBytes(StandardCharsets.UTF_8)
+        );
+
         this.expirationMs = expirationMs;
     }
 
@@ -43,19 +44,25 @@ public class JwtUtil {
     /**
      * Creates a signed JWT embedding userId, email, role, and fullName.
      *
-     * @param userId    MongoDB _id of the authenticated user
-     * @param email     user's email (informational, not used for auth decisions)
-     * @param role      user's role string ("USER" or "ADMIN")
-     * @param fullName  firstName + " " + lastName — stored as the "fullName" claim
+     * @param userId   MongoDB _id of the authenticated user
+     * @param email    user's email
+     * @param role     user's role ("USER" or "ADMIN")
+     * @param fullName firstName + " " + lastName
      * @return compact signed JWT string
      */
-    public String generateToken(String userId, String email, String role, String fullName) {
+    public String generateToken(
+            String userId,
+            String email,
+            String role,
+            String fullName
+    ) {
         long now = System.currentTimeMillis();
+
         return Jwts.builder()
-                .subject(userId)              // sub = userId — this is what the filter trusts
-                .claim("email",    email)
-                .claim("role",     role)
-                .claim("fullName", fullName)  // NEW — used to display real name on reviews
+                .subject(userId)
+                .claim("email", email)
+                .claim("role", role)
+                .claim("fullName", fullName)
                 .issuedAt(new Date(now))
                 .expiration(new Date(now + expirationMs))
                 .signWith(signingKey)
@@ -66,11 +73,10 @@ public class JwtUtil {
 
     /**
      * Validates the token signature and expiry.
-     * Returns the parsed Claims on success, or throws JwtException / IllegalArgumentException.
      *
-     * @param token compact JWT string (without "Bearer " prefix)
-     * @return parsed Claims
-     * @throws JwtException if the token is malformed, expired, or the signature is invalid
+     * @param token compact JWT string without "Bearer " prefix
+     * @return parsed JWT claims
+     * @throws JwtException if token is malformed, expired, or signature is invalid
      */
     public Claims validateAndExtractClaims(String token) {
         return Jwts.parser()
@@ -87,16 +93,19 @@ public class JwtUtil {
     }
 
     public String extractRole(String token) {
-        return validateAndExtractClaims(token).get("role", String.class);
+        return validateAndExtractClaims(token)
+                .get("role", String.class);
     }
 
     public String extractFullName(String token) {
-        return validateAndExtractClaims(token).get("fullName", String.class);
+        return validateAndExtractClaims(token)
+                .get("fullName", String.class);
     }
 
+    // ── Safe validation ──────────────────────────────────────────────────────
+
     /**
-     * Safe validation wrapper — returns false instead of throwing.
-     * Use only for the filter's guard check before parsing claims.
+     * Returns false instead of throwing if the token is invalid.
      */
     public boolean isValid(String token) {
         try {
