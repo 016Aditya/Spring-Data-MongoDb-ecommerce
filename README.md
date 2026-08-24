@@ -4,49 +4,128 @@ Spring Boot + MongoDB REST API powering the ShopApp e-commerce platform.
 
 A stateless, production-oriented backend covering the complete commerce flow — authentication, products, cart, checkout, orders, returns, reviews, wishlist, and addresses.
 
+
 ✨ What This Backend Does
 
-ShopApp is a stateless REST API consumed by the companion React frontend. It covers:
+ShopApp is a stateless REST API consumed by the companion React frontend. It intentionally goes beyond basic CRUD and implements several production-style backend patterns:
 
-🛍️ Products, cart, checkout, orders, reviews, wishlist & addresses
+Capability
 
-📦 Atomic stock operations to prevent overselling
+What it provides
 
-🔐 Rate limiting, lockouts, progressive delays & CAPTCHA escalation
+🛍️ E-commerce Core
 
-🧾 Immutable order snapshots
+Products, cart, checkout, orders, reviews, wishlist & addresses
 
-🔎 Synonym-aware relevance-ranked search
+📦 Atomic Inventory
 
-🔄 Explicit return/refund state machine
+Race-safe stock decrements to prevent overselling
 
-⚠️ Consistent structured API errors
+🔐 Login Hardening
+
+Rate limiting, lockouts, progressive delays & CAPTCHA escalation
+
+🧾 Order Snapshots
+
+Historical orders remain correct even if products change
+
+🔎 Relevance Search
+
+Tokenized search, synonyms and in-memory ranking
+
+🔄 Return Workflow
+
+Explicit order-return/refund state machine
+
+⚠️ Consistent Errors
+
+Structured JSON errors with domain-specific codes
 
 📚 Table of Contents
 
+
+
 Overview
 
-Tech Stack
+Tech stack
 
 Architecture
 
-Project Structure
+Project structure
 
-Data Model
+Data model
 
-Security
+Security architecture
 
-Design Decisions
+Key design decisions
 
-API Reference
+API reference
 
-Error Handling
+Error handling
 
 Configuration
 
-Getting Started
+Getting started
 
-Roadmap
+Known limitations / roadmap
+
+Overview
+
+This is the backend for ShopApp, a full e-commerce platform (catalog, cart, checkout, orders/returns, reviews, wishlist, addresses). It's a stateless REST API — no server-rendered views, no sessions — designed to be consumed by the companion React frontend (Ecommerce-Frontend-Reactjs).
+
+Beyond CRUD, the service implements a few things a production store actually needs:
+
+Atomic, race-safe stock decrements at checkout (no overselling under concurrent orders)
+
+A brute-force-resistant login flow (lockouts, progressive delay, CAPTCHA escalation)
+
+Immutable order history via product snapshots
+
+A custom in-memory relevance-ranked product search with synonym expansion
+
+A full order return/refund state machine
+
+Tech stack
+
+Layer
+
+Technology
+
+Language / runtime
+
+Java 21
+
+Framework
+
+Spring Boot 4.0.7
+
+Database
+
+MongoDB (Spring Data MongoDB)
+
+Auth
+
+Spring Security (stateless) + JJWT 0.12.6
+
+Rate limiting
+
+Bucket4j 8.16.0
+
+Bot protection
+
+Cloudflare Turnstile (server-side verification)
+
+Object mapping
+
+ModelMapper 3.2.6
+
+Boilerplate reduction
+
+Lombok
+
+Build
+
+Maven
 
 🏗️ Architecture
 
@@ -89,10 +168,39 @@ The service orchestrates: validation → mutation → persistence, delegating an
 
 GlobalExceptionHandler catches any domain exception thrown along the way and converts it into a consistent ApiErrorResponse JSON body with the right HTTP status.
 
-📁 Project Structure
+🔁 Request Lifecycle at a Glance
+
+React Client
+    │
+    │ HTTPS + Bearer JWT
+    ▼
+JwtAuthFilter
+    │
+    ▼
+SecurityConfig
+    │
+    ▼
+REST Controller
+    │
+    ▼
+Domain Service
+    ├──────────────► InventoryService
+    │                    │
+    │                    ▼
+    │              MongoDB Repository
+    │
+    ▼
+MongoDB Repository
+    │
+    ▼
+MongoDB
+
+Errors ───────────► GlobalExceptionHandler ───► ApiErrorResponse
 
 
-```text
+## 📁 Project Structure
+
+
 learnSpringMongoDb/
 └── src/main/java/learnMongoDb/learnSpringMongoDb/
     ├── config/          # Security, CORS, Mongo, ModelMapper, rate limiter, seeder, synonyms
@@ -112,12 +220,62 @@ Naming convention: DTOs are nested classes inside a per-domain DTO file (e.g. Or
 
 7 MongoDB collections in the ecommerce_db database:
 
-USERS ──< ORDERS
-USERS ──o CARTS
-USERS ──o WISHLISTS
-USERS ──< ADDRESSES
-USERS ──< REVIEWS >── PRODUCTS
-ORDERS ──< ORDER ITEMS (product snapshots)
+erDiagram
+    USERS ||--o{ ORDERS : places
+    USERS ||--o| CARTS : owns
+    USERS ||--o| WISHLISTS : owns
+    USERS ||--o{ ADDRESSES : saves
+    USERS ||--o{ REVIEWS : writes
+    PRODUCTS ||--o{ REVIEWS : receives
+    ORDERS }o--o{ PRODUCTS : "snapshots at purchase time"
+
+    USERS {
+        string id PK
+        string email UK
+        string passwordHash
+        string role
+        int failedLoginAttempts
+        instant lockedUntil
+    }
+    PRODUCTS {
+        string id PK
+        string name
+        string category
+        double price
+        int stock
+        boolean inStock
+        double averageRating
+    }
+    ORDERS {
+        string id PK
+        string userId FK
+        string status
+        double totalPrice
+        list items
+        string refundStatus
+    }
+    CARTS {
+        string id PK
+        string userId FK "unique"
+        list items
+        double cartTotal
+    }
+    ADDRESSES {
+        string id PK
+        string userId FK
+        boolean defaultAddress
+    }
+    REVIEWS {
+        string id PK
+        string productId FK
+        string userId FK
+        int rating
+    }
+    WISHLISTS {
+        string id PK
+        string userId FK
+        list productIds
+    }
 
 Notable fields:
 
@@ -135,9 +293,21 @@ Wishlist — just a userId → List<String> of product IDs; deliberately the sim
 
 Authentication is stateless JWT — no HTTP sessions, no server-side auth state beyond what's in Mongo for lockouts.
 
-Client → JwtAuthFilter → SecurityContext → Controller
-                 │
-                 └── invalid/expired JWT → 401 JSON
+sequenceDiagram
+    participant C as Client
+    participant F as JwtAuthFilter
+    participant S as SecurityContext
+    participant Ctrl as Controller
+
+    C->>F: Request + Authorization: Bearer <jwt>
+    alt no header
+        F->>Ctrl: pass through (anonymous)
+    else invalid / expired token
+        F-->>C: 401 Unauthorized (JSON body)
+    else valid token
+        F->>S: set CustomUserDetails principal
+        F->>Ctrl: continue chain
+    end
 
 Login hardening (UserService.loginUser) runs a fixed sequence of checks before a password comparison even happens:
 
@@ -145,29 +315,43 @@ Step
 
 Mechanism
 
+Configuration
+
 1
 
-IP + email rate limit — 5 requests/min
+IP + email rate limit (Bucket4j)
+
+5 requests / minute
 
 2
 
-Hard lockout — 15 min; progressive duration
+Hard lockout check
+
+15 min (1 min on first offense, doubling lockout count thereafter)
 
 3
 
-Progressive delay — 2s exponential, 30s cap
+Progressive delay
+
+2s × 2^(attempts-2), capped at 30s
 
 4
 
-CAPTCHA after 3 failures — Cloudflare verification
+CAPTCHA requirement
+
+Triggered after 3 failed attempts; verified server-side against Cloudflare
 
 5
 
-BCrypt password check with dummy hash for unknown emails
+Password check (BCrypt)
+
+Constant-time: unknown emails still run a dummy hash comparison to avoid timing leaks
 
 6
 
-Atomic counter reset on success
+Counter reset
+
+All failure counters cleared atomically on success
 
 Failed-login bookkeeping uses MongoDB's atomic findAndModify (via MongoTemplate) rather than read-modify-write, so concurrent failed attempts from the same account can't race each other into an inconsistent counter.
 
@@ -226,7 +410,13 @@ Attempting a transition from the wrong state (e.g. returning a `PENDING` order) 
 
 **Base path:** `/api`
 
-**Auth:** 🔓 public · 🔒 requires `Authorization: Bearer <jwt>`
+| Symbol | Meaning |
+|---|---|
+| 🔓 | Public endpoint |
+| 🔒 | Requires `Authorization: Bearer <jwt>` |
+
+> **Tip:** Product catalog reads and product review reads are intentionally public so guests can browse before signing in.
+
 
 ## Users — `/api/users`
 
@@ -388,4 +578,4 @@ These are the main areas identified for a future production-scale iteration:
 - `RateLimiterService`'s Bucket4j buckets are held in an in-memory `ConcurrentHashMap` — fine for a single instance, but won't share state across multiple backend replicas. A Redis-backed bucket store would be the natural next step for horizontal scaling.
 - Turnstile is currently configured with `turnstile.enabled=false` in the sample config — CAPTCHA enforcement itself (the threshold check in `UserService`) is always active, but the toggle exists to allow disabling the Cloudflare round-trip entirely in environments without real Turnstile keys.
 - There's no admin-role gate at the controller level for the admin-only endpoints listed above (product mutation, order status/return admin actions) — they currently only require any authenticated JWT, not `ROLE_ADMIN` specifically. Worth tightening with a `@PreAuthorize("hasRole('ADMIN')")` pass.
-- Product search ranks over a capped 300-document candidate pool fetched via regex — fine at current catalog size, but a dedicated text inde
+- Product search ranks over a capped 300-document candidate pool fetched via regex — fine at current catalog size, but a dedicated text index (or
